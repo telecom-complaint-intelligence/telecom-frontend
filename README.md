@@ -80,22 +80,22 @@ main        → production-ready, protected, deploy-only
 
 ```bash
 # install dependencies
-npm install
+pnpm install
 
 # run local dev server
-npm run dev            # http://localhost:3000
+pnpm dev            # http://localhost:3000
 
 # lint
-npm run lint
+pnpm lint
 
 # type-check
-npm run type-check
+pnpm type-check
 
 # build (production)
-npm run build
+pnpm build
 
 # run tests
-npm run test
+pnpm test
 ```
 
 > All commands run from the **repo root** — there is no separate `frontend/` sub-path in this repo, this repo IS the frontend.
@@ -106,19 +106,19 @@ npm run test
 
 - [ ] Confirm you're on the correct branch (`git branch` shows `feature/...`, not `dev`/`main`)
 - [ ] Pulled latest `dev`: `git pull origin dev` (then rebase/merge into your branch if it already existed)
-- [ ] `npm install` — in case dependencies changed since your last pull
+- [ ] `pnpm install` — in case dependencies changed since your last pull
 - [ ] `.env.local` present and up to date (check `.env.example` for any new variables added by teammates)
-- [ ] `npm run dev` — confirm the app boots with no errors before touching code
+- [ ] `pnpm dev` — confirm the app boots with no errors before touching code
 - [ ] Check open PRs / issues board — make sure no one else is already working on the same page/component
 
 ---
 
 ## Before You Push
 
-- [ ] `npm run lint` — no lint errors
-- [ ] `npm run type-check` — no TypeScript errors
-- [ ] `npm run build` — production build succeeds (catches issues `dev` mode hides)
-- [ ] `npm run test` — all tests pass (add/update tests for what you changed)
+- [ ] `pnpm lint` — no lint errors
+- [ ] `pnpm type-check` — no TypeScript errors
+- [ ] `pnpm build` — production build succeeds (catches issues `dev` mode hides)
+- [ ] `pnpm test` — all tests pass (add/update tests for what you changed)
 - [ ] No console.log / debug code left in
 - [ ] No secrets, API keys, or `.env` values hardcoded or committed
 - [ ] Commit messages follow convention (see below)
