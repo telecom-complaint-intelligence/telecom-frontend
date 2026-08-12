@@ -78,6 +78,31 @@ main        → production-ready, protected, deploy-only
 
 ## 💻 Commands (run from repo root: `telecom-frontend/`)
 
+### 🛠️ Installing `pnpm` (if not present)
+
+You must install `pnpm` before setting up the project:
+
+- **macOS/Linux**:
+  ```bash
+  curl -fsSL https://get.pnpm.io/install.sh | sh -
+  # Or via Homebrew:
+  brew install pnpm
+  # Or via npm (if Node.js is already installed):
+  npm install -g pnpm
+  ```
+- **Windows**:
+  ```powershell
+  iwr https://get.pnpm.io/install.ps1 -useb | iex
+  # Or via winget:
+  winget install StefanScherer.pnpm
+  # Or via npm (if Node.js is already installed):
+  npm install -g pnpm
+  ```
+
+*Restart your terminal after installation.*
+
+### 🚀 Commands
+
 ```bash
 # install dependencies
 pnpm install
