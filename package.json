@@ -1,12 +1,14 @@
 {
-  "name": "temp-frontend",
+  "name": "telecom-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests specified yet\""
   },
   "dependencies": {
     "next": "16.3.0",
@@ -22,6 +24,5 @@
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "packageManager": "pnpm@10.32.1"
+  }
 }
