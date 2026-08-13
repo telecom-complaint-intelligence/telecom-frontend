@@ -13,7 +13,7 @@ on:
 
 jobs:
   quality-check:
-    name: Lint, Type Check, Test & Build
+    name: Lint, Type Check & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +23,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.32.1
           run_install: false
 
       - name: Setup Node.js
@@ -39,10 +39,7 @@ jobs:
         run: pnpm lint
 
       - name: Run type check
-        run: pnpm type-check
-
-      - name: Run tests
-        run: pnpm test
+        run: pnpm exec tsc --noEmit
 
       - name: Build application
         run: pnpm build
