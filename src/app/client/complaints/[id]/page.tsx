@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Clock, ShieldAlert, CheckCircle, Send, Paperclip, User } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 
 interface Comment {
   author: string;
@@ -13,6 +14,7 @@ interface Comment {
 }
 
 export default function ClientComplaintIntelligencePage() {
+  const { user } = useAuth();
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -39,7 +41,7 @@ export default function ClientComplaintIntelligencePage() {
     if (!commentText.trim()) return;
 
     const newComment: Comment = {
-      author: "Priya S.",
+      author: user?.name || user?.email?.split("@")[0].toUpperCase() || "Priya S.",
       role: activeTab === "note" ? "Internal Note" : "Operator",
       message: commentText,
       time: "Just now",
