@@ -6,8 +6,15 @@ import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
-  const { user, logout, updateProfile, updateServiceDetails } = useAuth();
+  const { user, logout, updateProfile, updateServiceDetails, verifyOtp, resendOtp } = useAuth();
   const router = useRouter();
+
+  // OTP Verification Inline states
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpSuccess, setOtpSuccess] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
 
   // Personal Info Edit states
   const [isEditing, setIsEditing] = useState(false);
@@ -70,6 +77,52 @@ export default function ProfilePage() {
   const handleLogout = () => {
     logout();
     router.push("/auth");
+  };
+
+  const handleTriggerVerification = async () => {
+    setOtpError("");
+    setOtpSuccess("");
+    setOtpLoading(true);
+    try {
+      const sent = await resendOtp(email);
+      if (sent) {
+        setOtpSuccess("A 6-digit OTP code has been sent. Please check your inbox!");
+        setShowOtpInput(true);
+      } else {
+        setOtpError("Failed to trigger verification code.");
+      }
+    } catch (err) {
+      setOtpError("An error occurred while sending the code.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError("");
+    setOtpSuccess("");
+    if (otpCode.trim().length !== 6) {
+      setOtpError("Please enter a valid 6-digit verification code.");
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      const verified = await verifyOtp(email, otpCode);
+      if (verified) {
+        setOtpSuccess("✓ Email verified successfully!");
+        setTimeout(() => {
+          setShowOtpInput(false);
+          window.location.reload();
+        }, 1500);
+      } else {
+        setOtpError("Invalid verification code. Please try again.");
+      }
+    } catch (err) {
+      setOtpError("An error occurred during verification.");
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
   const startEdit = () => {
@@ -359,18 +412,71 @@ export default function ProfilePage() {
                 </div>
                 <div className="py-4 grid grid-cols-3 gap-4">
                   <span className="font-mono text-xs text-plum uppercase">Email Address</span>
-                  <span className="col-span-2 font-medium flex items-center gap-2">
-                    {email}
-                    {user?.emailVerified ? (
-                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded flex items-center gap-1">
-                        <Check size={10} /> Verified
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-gray-100 text-gray-500 border border-gray-300 rounded flex items-center gap-1">
-                        <X size={10} /> Not Verified
-                      </span>
+                  <div className="col-span-2 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{email}</span>
+                      {user?.emailVerified ? (
+                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded flex items-center gap-1">
+                          <Check size={10} /> Verified
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded flex items-center gap-1">
+                            <X size={10} /> Not Verified
+                          </span>
+                          {!showOtpInput && (
+                            <button
+                              type="button"
+                              onClick={handleTriggerVerification}
+                              disabled={otpLoading}
+                              className="text-[11px] font-mono font-semibold px-2 py-0.5 bg-[#6C5CE7] hover:bg-[#5A4AD1] text-white rounded border border-[#6C5CE7] transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {otpLoading ? "Sending..." : "Verify Now"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {showOtpInput && (
+                      <form onSubmit={handleVerifyOtp} className="space-y-2 p-3 bg-[#FDFBF7] border border-[#EBE6E0] rounded animate-fade-in max-w-sm">
+                        <label className="block text-[10px] font-mono text-plum uppercase tracking-wider">
+                          Enter 6-Digit OTP Code
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                            placeholder="e.g. 123456"
+                            className="px-3 py-1.5 bg-background border border-border-beige rounded text-xs focus:outline-none focus:border-accent w-32 font-mono text-center tracking-widest text-sm"
+                            required
+                          />
+                          <button
+                            type="submit"
+                            disabled={otpLoading || otpCode.length !== 6}
+                            className="px-4 py-1.5 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            {otpLoading ? "Verifying..." : "Submit Code"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowOtpInput(false)}
+                            className="px-3 py-1.5 border border-border-beige hover:bg-[#F5EFEB] text-plum text-xs rounded cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {otpError && (
+                          <p className="text-[10px] text-red-500 font-semibold">{otpError}</p>
+                        )}
+                        {otpSuccess && (
+                          <p className="text-[10px] text-green-600 font-semibold">{otpSuccess}</p>
+                        )}
+                      </form>
                     )}
-                  </span>
+                  </div>
                 </div>
                 <div className="py-4 grid grid-cols-3 gap-4">
                   <span className="font-mono text-xs text-plum uppercase">Phone Number</span>
