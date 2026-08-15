@@ -27,7 +27,8 @@ export default function RaiseComplaintPage() {
     }, 500);
   };
 
-  if (user && user.isProfileComplete === false) {
+  if (user && (user.isProfileComplete === false || user.emailVerified === false)) {
+    const isUnverified = user.emailVerified === false;
     return (
       <main className="p-6 md:p-12 space-y-8 max-w-md w-full mx-auto text-center font-sans pt-16">
         <div className="bg-card-bg border border-border-beige p-8 rounded shadow-sm space-y-6">
@@ -37,18 +38,30 @@ export default function RaiseComplaintPage() {
             </span>
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-serif font-semibold">Complete your profile setup to raise the complaint</h1>
+            <h1 className="text-xl font-serif font-semibold">
+              {isUnverified 
+                ? "Verify your email to raise the complaint"
+                : "Complete your profile setup to raise the complaint"}
+            </h1>
             <p className="text-xs text-plum leading-relaxed">
-              Before raising tickets, you must configure your billing name, service location, and usage plan preferences.
+              {isUnverified
+                ? "Before raising tickets, your registered email address must be verified. We will send an OTP confirmation link to verify your account."
+                : "Before raising tickets, you must configure your billing name, service location, and usage plan preferences."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/auth/setup-profile")}
-            className="w-full py-3 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded cursor-pointer transition-colors"
-          >
-            Start Onboarding Setup
-          </button>
+          {isUnverified ? (
+            <div className="p-3 bg-amber-50 border border-amber-100 rounded text-[11px] text-amber-700 font-medium">
+              An OTP link has been sent to your email. Please click it to complete verification.
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => router.push("/auth/setup-profile")}
+              className="w-full py-3 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded cursor-pointer transition-colors"
+            >
+              Start Onboarding Setup
+            </button>
+          )}
         </div>
       </main>
     );

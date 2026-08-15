@@ -59,9 +59,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         </div>
 
         <div>
-          <div className="text-xs text-plum font-mono border-t border-border-beige pt-4">
-            ACCOUNT 90XXXX4821<br />
-            FIBRE 100 MBPS · MADURAI
+          <div className="text-[11px] text-plum font-mono border-t border-border-beige pt-4 uppercase leading-relaxed">
+            ACCOUNT: {user?.accountRef || "-"}<br />
+            PLAN: {user?.planUsage ? String(user.planUsage).toUpperCase() : "-"} · {user?.city || "-"}
           </div>
         </div>
       </aside>
@@ -72,12 +72,24 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         <header className="hidden md:flex border-b border-border-beige bg-card-bg px-6 md:px-8 py-4 items-center justify-between shrink-0">
           <span className="text-xs font-mono uppercase tracking-wider text-plum">Customer Portal</span>
           <div className="flex items-center gap-4">
-            <span className="h-8 w-8 rounded-full bg-accent-light flex items-center justify-center text-accent">
-              <User size={16} />
-            </span>
+            {user?.profilePicture ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.profilePicture}
+                alt="Profile"
+                className="h-8 w-8 rounded-full object-cover border border-border-beige"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="h-8 w-8 rounded-full bg-accent-light flex items-center justify-center text-accent">
+                <User size={16} />
+              </span>
+            )}
             <div className="text-left leading-none hidden sm:block">
-              <span className="text-sm font-medium block">Arjun Raman</span>
-              <span className="text-[10px] font-mono text-plum">CUST-88214</span>
+              <span className="text-sm font-medium block">{user?.name || "-"}</span>
+              <span className="text-[10px] font-mono text-plum">
+                {user?.id || "-"}
+              </span>
             </div>
           </div>
         </header>

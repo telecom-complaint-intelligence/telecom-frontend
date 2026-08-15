@@ -1,33 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Clock, Activity, CheckCircle, HelpCircle } from "lucide-react";
+import { Search, Clock, Activity, CheckCircle } from "lucide-react";
 
 interface Complaint {
   id: string;
   title: string;
   category: string;
-  date: string;
-  priority: "Urgent" | "High" | "Medium" | "Low";
-  status: "Open" | "Pending" | "In Progress" | "Resolved" | "Closed";
+  createdAt: string;
+  severity: string;
+  status: string;
   description: string;
 }
 
 export default function MyComplaintsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
 
-  const complaints: Complaint[] = [
-    { id: "CMP1025", title: "Slow internet connection", category: "BROADBAND", date: "Aug 11, 2026", priority: "High", status: "Open", description: "Speeds drop below 10Mbps every evening." },
-    { id: "CMP1024", title: "Frequent call drops", category: "NETWORK", date: "Aug 10, 2026", priority: "Medium", status: "Pending", description: "Dropped calls occurring inside Anna Nagar office." },
-    { id: "CMP1019", title: "Double billing error on invoice", category: "BILLING", date: "Jul 28, 2026", priority: "Low", status: "Resolved", description: "Charged twice on credit card statement." },
-    { id: "CMP1012", title: "SIM Card upgrade activation issue", category: "SIM", date: "Jul 15, 2026", priority: "High", status: "Closed", description: "Upgraded 5G card not receiving signal." },
-  ];
+  useEffect(() => {
+    const stored = localStorage.getItem("telu_raised_complaints");
+    if (stored) {
+      setTimeout(() => setComplaints(JSON.parse(stored)), 0);
+    }
+  }, []);
 
   const filtered = complaints.filter(c => {
     const matchesSearch = c.title.toLowerCase().includes(searchTerm.toLowerCase()) || c.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "All" || c.status === filterStatus;
+    const matchesStatus = filterStatus === "All" || c.status.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
@@ -60,7 +61,7 @@ export default function MyComplaintsPage() {
         </div>
 
         <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-          {["All", "Open", "Pending", "In Progress", "Resolved", "Closed"].map((status) => (
+          {["All", "Open", "Pending", "Resolved"].map((status) => (
             <button
               key={status}
               type="button"
@@ -96,32 +97,32 @@ export default function MyComplaintsPage() {
                     {complaint.id}
                   </span>
                   <span className="text-xs font-mono font-semibold text-accent">
-                    {complaint.category}
+                    {complaint.category.toUpperCase()}
                   </span>
-                  <span className="text-xs text-plum font-mono">
-                    Filed {complaint.date}
+                  <span className="text-xs font-mono text-plum flex items-center gap-1">
+                    {complaint.status === "OPEN" ? (
+                      <Activity size={12} className="text-red-500" />
+                    ) : complaint.status === "PENDING" ? (
+                      <Clock size={12} className="text-amber-500" />
+                    ) : (
+                      <CheckCircle size={12} className="text-accent" />
+                    )}
+                    {complaint.severity.toUpperCase()} &middot; {complaint.createdAt}
                   </span>
                 </div>
-                <h3 className="text-lg font-serif font-medium">{complaint.title}</h3>
-                <p className="text-xs text-plum leading-relaxed">{complaint.description}</p>
+                <h2 className="text-lg font-serif font-medium text-foreground">{complaint.title}</h2>
+                <p className="text-xs text-plum line-clamp-1 leading-relaxed">{complaint.description}</p>
               </div>
 
-              <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-border-beige pt-3 md:pt-0">
-                <span
-                  className={`text-xs px-3 py-1 rounded-full font-mono font-medium ${
-                    complaint.status === "Resolved"
-                      ? "bg-purple-100 text-accent"
-                      : complaint.status === "Closed"
-                      ? "bg-slate-100 text-slate-700"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {complaint.status.toUpperCase()}
-                </span>
-                <span className="text-xs font-mono font-medium text-plum bg-background px-2.5 py-1 border border-border-beige rounded">
-                  {complaint.priority}
-                </span>
-              </div>
+              <span className={`text-xs font-mono font-medium px-3 py-1 rounded border shrink-0 ${
+                complaint.status === "OPEN"
+                  ? "bg-red-50 text-red-700 border-red-200"
+                  : complaint.status === "PENDING"
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-purple-50 text-accent border-purple-200"
+              }`}>
+                {complaint.status}
+              </span>
             </Link>
           ))
         )}
