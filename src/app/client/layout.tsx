@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, FileText, AlertOctagon, BarChart3, Users, Bell, Settings, User } from "lucide-react";
 import Image from "next/image";
+import { useAuth } from "@/components/auth-provider";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const pathname = usePathname();
 
   const navItems = [
@@ -62,7 +64,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div>
           <div className="text-xs text-plum font-mono border-t border-border-beige pt-4">
             SHIFT CONSOLE<br />
-            14 OPERATORS ONLINE
+            0 OPERATORS ONLINE
           </div>
         </div>
       </aside>
@@ -77,8 +79,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <User size={16} />
             </span>
             <div className="text-left leading-none hidden sm:block">
-              <span className="text-sm font-medium block">Priya S.</span>
-              <span className="text-[10px] font-mono text-plum">SHIFT SUPERVISOR</span>
+              {user ? (
+                <>
+                  <span className="text-sm font-semibold block">{user.name || user.email.split("@")[0].toUpperCase()}</span>
+                  <span className="text-[9px] font-mono text-plum/70 block mt-0.5">
+                    ID: {user.id ? user.id.replace("CUST-", "OPS-") : "-"}
+                  </span>
+                  <span className="text-[9px] font-mono text-plum block uppercase mt-0.5">
+                    {user.role === "client"
+                      ? (user.department ? `${user.department.toUpperCase()} OPS` : "MASTER ADMIN")
+                      : user.role.toUpperCase()}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-plum font-mono animate-pulse">Loading Auth...</span>
+              )}
             </div>
           </div>
         </header>
