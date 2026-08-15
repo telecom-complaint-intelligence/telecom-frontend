@@ -62,19 +62,20 @@ function VerifyEmailContent() {
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text").trim();
-    if (!/^\d+$/.test(pastedData)) return;
+    if (!/^\d+$/.test(pastedData)) return; // Only allow digits
 
-    const digits = pastedData.slice(0, 6).split("");
+    const digits = pastedData.split("").slice(0, 6);
     const newOtp = [...otp];
-    for (let i = 0; i < 6; i++) {
-      if (digits[i]) {
-        newOtp[i] = digits[i];
-      }
-    }
+    
+    digits.forEach((char, idx) => {
+      newOtp[idx] = char;
+    });
+    
     setOtp(newOtp);
 
-    const focusIndex = Math.min(digits.length - 1, 5);
-    inputRefs.current[focusIndex]?.focus();
+    // Focus the last filled input or the final input box
+    const targetFocusIndex = Math.min(digits.length, 5);
+    inputRefs.current[targetFocusIndex]?.focus();
   };
 
   const handleVerify = async (e: React.FormEvent) => {
