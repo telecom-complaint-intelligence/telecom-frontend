@@ -260,6 +260,14 @@ export default function SetupProfilePage() {
                     <ArrowLeft size={14} /> Back
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => router.push("/customer/dashboard")}
+                  className="px-4 py-2 text-plum hover:text-[#1E0A2D] text-xs font-semibold rounded flex items-center cursor-pointer transition-colors"
+                >
+                  Skip for now
+                </button>
+
                 {step < 3 ? (
                   <button
                     type="button"
