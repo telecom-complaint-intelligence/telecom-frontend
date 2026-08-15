@@ -49,6 +49,15 @@ interface AuthContextType {
   acceptCookieConsent: (consent: boolean) => Promise<boolean>;
   verifyOtp: (email: string, otp: string) => Promise<boolean>;
   resendOtp: (email: string) => Promise<boolean>;
+  inviteClient: (email: string, pass: string, departmentId: string) => Promise<boolean>;
+  getDepartments: () => Promise<{ id: string; name: string; }[]>;
+  createDepartment: (name: string) => Promise<boolean>;
+  activateClient: (token: string) => Promise<boolean>;
+  getOperators: () => Promise<{ id: string; name: string; email: string; department: string; status: string; }[]>;
+  updateDepartment: (id: string, name: string) => Promise<boolean>;
+  deleteDepartment: (id: string) => Promise<boolean>;
+  updateOperator: (id: string, departmentId: string | null) => Promise<boolean>;
+  deleteOperator: (id: string) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -113,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               id: data.user.id,
               email: data.user.email,
               role: data.user.role,
+              department: data.user.department,
               isProfileComplete: data.user.isProfileComplete,
               emailVerified: data.user.emailVerified,
               phoneVerified: data.user.phoneVerified,
@@ -188,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: data.user.id,
             email: data.user.email,
             role: data.user.role,
+            department: data.user.department,
             isProfileComplete: data.user.isProfileComplete,
             emailVerified: data.user.emailVerified,
             phoneVerified: data.user.phoneVerified,
@@ -511,6 +522,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const inviteClient = async (email: string, pass: string, departmentId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/invite-client`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pass, department_id: departmentId, requester_email: user?.email }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Invite client error:", err);
+      return false;
+    }
+  };
+
+  const getDepartments = async (): Promise<{ id: string; name: string; }[]> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/departments`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.warn("Get departments error:", err);
+    }
+    return [];
+  };
+
+  const createDepartment = async (name: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/departments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, requester_email: user?.email }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Create department error:", err);
+      return false;
+    }
+  };
+
+  const activateClient = async (token: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/activate-client`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Activate client error:", err);
+      return false;
+    }
+  };
+
+  const getOperators = async (): Promise<{ id: string; name: string; email: string; department: string; status: string; }[]> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/operators?email=${encodeURIComponent(user?.email || "")}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.warn("Get operators error:", err);
+    }
+    return [];
+  };
+
+  const updateDepartment = async (id: string, name: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/departments/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, requester_email: user?.email }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Update department error:", err);
+      return false;
+    }
+  };
+
+  const deleteDepartment = async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/departments/${id}?requester_email=${encodeURIComponent(user?.email || "")}`, {
+        method: "DELETE",
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Delete department error:", err);
+      return false;
+    }
+  };
+
+  const updateOperator = async (id: string, departmentId: string | null): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/operators/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department_id: departmentId, requester_email: user?.email }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Update operator error:", err);
+      return false;
+    }
+  };
+
+  const deleteOperator = async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/auth/operators/${id}?requester_email=${encodeURIComponent(user?.email || "")}`, {
+        method: "DELETE",
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn("Delete operator error:", err);
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -527,6 +656,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         acceptCookieConsent,
         verifyOtp,
         resendOtp,
+        inviteClient,
+        getDepartments,
+        createDepartment,
+        activateClient,
+        getOperators,
+        updateDepartment,
+        deleteDepartment,
+        updateOperator,
+        deleteOperator,
         loading
       }}
     >

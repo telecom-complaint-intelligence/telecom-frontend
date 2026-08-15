@@ -1,119 +1,89 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
-function ActivationForm() {
-  const { activateClientAccount } = useAuth();
+function ActivationContainer() {
+  const { activateClient } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const email = searchParams.get("email") || "";
-  const department = searchParams.get("dept") || "";
+  const token = searchParams.get("token") || "";
 
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password || !confirmPassword) {
-      setError("Please fill in all fields.");
+  useEffect(() => {
+    if (!token) {
+      setStatus("error");
+      setErrorMsg("Invitation token is missing. Please check the link sent in your email.");
       return;
     }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    setError("");
-    setLoading(true);
 
-    try {
-      await activateClientAccount(email, password, department);
-      router.push("/client/dashboard");
-    } catch (err) {
-      setError("Activation failed. Please check the link or contact your administrator.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const performActivation = async () => {
+      try {
+        const success = await activateClient(token);
+        if (success) {
+          setStatus("success");
+          setTimeout(() => {
+            router.push("/auth");
+          }, 3500);
+        } else {
+          setStatus("error");
+          setErrorMsg("This invitation link is invalid or has expired. Please contact your system administrator.");
+        }
+      } catch (err) {
+        setStatus("error");
+        setErrorMsg("Failed to connect to the authentication server. Please try again later.");
+      }
+    };
+
+    performActivation();
+  }, [token, activateClient, router]);
 
   return (
-    <div className="w-full max-w-md p-8 bg-card-bg border border-border-beige rounded shadow-sm space-y-6">
-      <div className="space-y-2 text-center md:text-left">
-        <h1 className="text-3xl font-serif tracking-tight">Activate Account</h1>
-        <p className="text-sm text-plum">
-          Complete the activation for your <span className="font-semibold text-accent">client-{department.toLowerCase()}</span> role.
-        </p>
-      </div>
-
-      {error && (
-        <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200">
-          {error}
+    <div className="w-full max-w-md p-8 bg-card-bg border border-border-beige rounded shadow-sm flex flex-col items-center justify-center text-center space-y-6 animate-fade-in">
+      {status === "verifying" && (
+        <div className="space-y-4">
+          <Loader2 className="h-12 w-12 text-[#6C5CE7] animate-spin mx-auto" />
+          <h2 className="text-xl font-serif">Verifying Invitation...</h2>
+          <p className="text-sm text-plum">
+            Please wait while we validate your activation token with the security server.
+          </p>
         </div>
       )}
 
-      <form onSubmit={handleActivate} className="space-y-4">
-        <div className="space-y-2">
-          <label className="text-xs font-mono uppercase tracking-wider text-plum">Email Address</label>
-          <input
-            type="email"
-            value={email}
-            disabled
-            className="w-full px-4 py-3 bg-background border border-border-beige rounded text-sm text-plum/70 cursor-not-allowed"
-          />
+      {status === "success" && (
+        <div className="space-y-4">
+          <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto animate-bounce" />
+          <h2 className="text-xl font-serif text-green-900">Account Activated!</h2>
+          <p className="text-sm text-plum">
+            Your client operations account has been successfully configured.
+          </p>
+          <p className="text-xs text-plum/70 bg-[#FDFBF7] p-3 border border-[#EBE6E0] rounded">
+            You will be automatically redirected to the sign-in page to log in using your Google account.
+          </p>
         </div>
+      )}
 
-        <div className="space-y-2">
-          <label className="text-xs font-mono uppercase tracking-wider text-plum">Department</label>
-          <input
-            type="text"
-            value={department}
-            disabled
-            className="w-full px-4 py-3 bg-background border border-border-beige rounded text-sm text-plum/70 cursor-not-allowed"
-          />
+      {status === "error" && (
+        <div className="space-y-4">
+          <XCircle className="h-12 w-12 text-red-600 mx-auto" />
+          <h2 className="text-xl font-serif text-red-950">Activation Failed</h2>
+          <p className="text-sm text-red-700 leading-relaxed">{errorMsg}</p>
+          <button
+            type="button"
+            onClick={() => router.push("/auth")}
+            className="px-6 py-2 bg-[#1E0A2D] text-white text-xs font-semibold rounded hover:bg-[#2F1442] transition-colors cursor-pointer"
+          >
+            Return to Login
+          </button>
         </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-mono uppercase tracking-wider text-plum" htmlFor="new-pass">
-            Set Password
-          </label>
-          <input
-            id="new-pass"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min 8 characters"
-            className="w-full px-4 py-3 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-mono uppercase tracking-wider text-plum" htmlFor="confirm-pass">
-            Confirm Password
-          </label>
-          <input
-            id="confirm-pass"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter password"
-            className="w-full px-4 py-3 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm"
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading || !email}
-          className="w-full py-3 bg-accent text-white font-medium text-sm rounded hover:opacity-90 transition-opacity"
-        >
-          {loading ? "Activating..." : "Activate Client Account"}
-        </button>
-      </form>
+      )}
     </div>
   );
 }
@@ -121,8 +91,13 @@ function ActivationForm() {
 export default function ActivatePage() {
   return (
     <div className="flex min-h-screen bg-background text-foreground items-center justify-center p-8">
-      <Suspense fallback={<div className="text-sm font-mono text-plum animate-pulse">Loading invitation details...</div>}>
-        <ActivationForm />
+      <Suspense fallback={
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-plum animate-spin" />
+          <span className="text-sm font-mono text-plum">Loading activation portal...</span>
+        </div>
+      }>
+        <ActivationContainer />
       </Suspense>
     </div>
   );
