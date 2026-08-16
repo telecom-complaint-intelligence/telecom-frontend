@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -7,24 +8,55 @@ import { useAuth } from "@/components/auth-provider";
 
 export default function RaiseComplaintPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const [title, setTitle] = useState("");
   const [behalfOf, setBehalfOf] = useState("self");
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [stateVal, setStateVal] = useState("");
-  const [country, setCountry] = useState("");
+  const [country, setCountry] = useState("India");
   const [zipcode, setZipcode] = useState("");
   const [contactMethod, setContactMethod] = useState("sms");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const payload = {
+        complaint: title,
+        filling_on_behalf_of: behalfOf === "others",
+        ...(behalfOf === "others" ? {
+          address,
+          city: city || "Madurai",
+          state: stateVal,
+          country: country || "India",
+          zipcode,
+        } : {})
+      };
+
+      const response = await fetch("http://localhost:8000/api/v1/complaints/me", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to submit complaint");
+      }
+
+      const data = await response.json();
+      router.push(`/customer/raise-complaint/submitting?id=${data.id}`);
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting complaint. Please check connection and try again.");
+    } finally {
       setLoading(false);
-      router.push("/customer/raise-complaint/submitting");
-    }, 500);
+    }
   };
 
   if (user && (user.isProfileComplete === false || user.emailVerified === false)) {
@@ -144,7 +176,22 @@ export default function RaiseComplaintPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-mono uppercase tracking-wider text-plum block" htmlFor="city">
+                    City
+                  </label>
+                  <input
+                    id="city"
+                    type="text"
+                    required
+                    placeholder="Madurai"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full px-4 py-3 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm"
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-xs font-mono uppercase tracking-wider text-plum block" htmlFor="state">
                     State
@@ -193,38 +240,6 @@ export default function RaiseComplaintPage() {
             </div>
           )}
 
-          {/* Contact methods */}
-          <div className="space-y-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-plum block">How should we reach you?</span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                { id: "sms", label: "SMS Update", value: "+91 90XXXX 4821" },
-                { id: "email", label: "Email Report", value: "arjun.r@mail.com" },
-                { id: "phone", label: "Phone call", value: "9 AM - 8 PM" }
-              ].map((way) => (
-                <label
-                  key={way.id}
-                  className={`p-4 border rounded flex flex-col gap-1 cursor-pointer transition-all ${
-                    contactMethod === way.id
-                      ? "border-accent bg-accent-light text-accent"
-                      : "border-border-beige hover:border-plum text-plum"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="contact"
-                    value={way.id}
-                    checked={contactMethod === way.id}
-                    onChange={(e) => setContactMethod(e.target.value)}
-                    className="sr-only"
-                  />
-                  <span className="text-sm font-semibold block">{way.label}</span>
-                  <span className="text-[11px] font-mono text-plum/70 block">{way.value}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           {/* Action buttons */}
           <div className="flex items-center gap-4 border-t border-border-beige pt-6">
             <button
@@ -255,15 +270,15 @@ export default function RaiseComplaintPage() {
             <div className="divide-y divide-border-beige">
               <div className="py-2 flex justify-between">
                 <span className="font-mono text-plum uppercase">Owner</span>
-                <span className="font-medium text-foreground">Arjun Raman</span>
+                <span className="font-medium text-foreground">{user?.name || "Customer"}</span>
               </div>
               <div className="py-2 flex justify-between">
                 <span className="font-mono text-plum uppercase">Filing ID</span>
-                <span className="font-medium font-mono text-accent">CUST-88214</span>
+                <span className="font-medium font-mono text-accent">{user?.id || "-"}</span>
               </div>
               <div className="py-2 flex justify-between">
                 <span className="font-mono text-plum uppercase">Exchange</span>
-                <span className="font-medium text-foreground">MDU-04 · Madurai</span>
+                <span className="font-medium text-foreground">{user?.city ? `${user.city}` : "Madurai"}</span>
               </div>
             </div>
           </div>
