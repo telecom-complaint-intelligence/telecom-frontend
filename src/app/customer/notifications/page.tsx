@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Bell, CheckCircle, AlertTriangle, MessageSquare, Info } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 
 interface Notification {
   id: string;
@@ -12,22 +13,131 @@ interface Notification {
   unread: boolean;
 }
 
+interface TicketDetail {
+  id: string;
+  ticket_number: string;
+  category?: string;
+  timestamp?: string;
+  status: string;
+  response?: string;
+  ai_analysis?: {
+    negativity_score?: number;
+  };
+  priority_scores?: {
+    complexity?: string;
+  };
+}
+
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    { id: "1", title: "Field engineer assigned to CMP1025", message: "Vinoth K. is scheduled to investigate the junction box outside your home.", time: "Today, 09:12", type: "update", unread: true },
-    { id: "2", title: "Your complaint needs a reply", message: "CMP1020 - Operator has requested confirmation of your router serial number.", time: "Today, 08:34", type: "alert", unread: true },
-    { id: "3", title: "SIM activation success", message: "CMP1021 - Your new 5G eSIM is activated. Please test it and close the ticket.", time: "Yesterday", type: "resolved", unread: false },
-    { id: "4", title: "Scheduled Network Maintenance", message: "Outages expected in Madurai between 1 AM and 4 AM on Aug 18.", time: "Aug 11, 2026", type: "system", unread: false },
-  ]);
+  const { token, user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchTicketsAndBuildNotifications = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/api/v1/complaints/me", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        if (!response.ok) throw new Error("Failed to fetch tickets");
+        const tickets = await response.json();
+
+        // Read read IDs from localStorage
+        const readIds = JSON.parse(localStorage.getItem("telu_read_notifications") || "[]");
+
+        const generated: Notification[] = [];
+
+        tickets.forEach((ticket: TicketDetail) => {
+          const dateStr = ticket.timestamp ? new Date(ticket.timestamp).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          }) : "Recent";
+
+          // 1. Registration notification
+          const regId = `reg-${ticket.id}`;
+          generated.push({
+            id: regId,
+            title: `Complaint Registered: ${ticket.ticket_number}`,
+            message: `Your ticket for category "${ticket.category || 'General'}" has been successfully logged.`,
+            time: dateStr,
+            type: "system",
+            unread: !readIds.includes(regId)
+          });
+
+          // 2. AI Triage notification
+          const triageId = `triage-${ticket.id}`;
+          const isHighlyNegative = (ticket.ai_analysis?.negativity_score ?? 0) > 0.6;
+          const comp = ticket.priority_scores?.complexity || "LOW";
+          generated.push({
+            id: triageId,
+            title: `AI Triage Completed: ${ticket.ticket_number}`,
+            message: `Triage complete. Sentiment: ${isHighlyNegative ? 'Highly Negative' : 'Neutral / Positive'}. Complexity assigned: ${comp}.`,
+            time: dateStr,
+            type: comp === "CRITICAL" || comp === "HIGH" ? "alert" : "update",
+            unread: !readIds.includes(triageId)
+          });
+
+          // 3. Resolution notification (if resolved or closed)
+          if (ticket.status === "RESOLVED" || ticket.status === "CLOSED") {
+            const resId = `res-${ticket.id}`;
+            generated.push({
+              id: resId,
+              title: `Complaint Resolved: ${ticket.ticket_number}`,
+              message: `The reported issue is resolved. Resolution action: ${ticket.response || "No action details provided."}`,
+              time: dateStr,
+              type: "resolved",
+              unread: !readIds.includes(resId)
+            });
+          }
+        });
+
+
+
+        // Sort: show unread first
+        generated.sort((a, b) => {
+          if (a.unread && !b.unread) return -1;
+          if (!a.unread && b.unread) return 1;
+          return 0;
+        });
+
+        setNotifications(generated);
+      } catch (err) {
+        console.error("Error building notifications:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTicketsAndBuildNotifications();
+  }, [token, user]);
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
   const handleMarkAllRead = () => {
+    const allIds = notifications.map(n => n.id);
+    localStorage.setItem("telu_read_notifications", JSON.stringify(allIds));
     setNotifications(notifications.map(n => ({ ...n, unread: false })));
   };
 
   const handleToggleRead = (id: string) => {
+    const readIds = JSON.parse(localStorage.getItem("telu_read_notifications") || "[]");
+    let newReadIds = [];
+    
+    const clicked = notifications.find(n => n.id === id);
+    if (clicked?.unread) {
+      newReadIds = [...readIds, id];
+    } else {
+      newReadIds = readIds.filter((item: string) => item !== id);
+    }
+    
+    localStorage.setItem("telu_read_notifications", JSON.stringify(newReadIds));
     setNotifications(notifications.map(n => n.id === id ? { ...n, unread: !n.unread } : n));
   };
 
@@ -78,7 +188,11 @@ export default function NotificationsPage() {
 
       {/* List */}
       <div className="space-y-3">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-16 bg-card-bg border border-border-beige rounded animate-pulse">
+            <p className="text-sm text-plum font-serif">Loading notifications...</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16 bg-card-bg border border-border-beige rounded">
             <p className="text-sm text-plum font-serif">No notifications to show here.</p>
           </div>

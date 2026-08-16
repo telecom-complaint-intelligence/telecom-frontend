@@ -26,8 +26,23 @@ export default function SetupProfilePage() {
   // Step 3: Plan Usage Type
   const [planUsage, setPlanUsage] = useState<"self" | "shop" | "organization">("self");
 
-  const handleNext = () => {
-    if (step < 3) setStep(prev => prev + 1);
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (step === 1) {
+      if (!name.trim() || !phone.trim()) {
+        alert("Please fill in contact information.");
+        return;
+      }
+      setStep(2);
+    } else if (step === 2) {
+      if (!address.trim() || !city.trim() || !stateVal.trim() || !country.trim() || !zipcode.trim()) {
+        alert("Please fill in all installation location details.");
+        return;
+      }
+      setStep(3);
+    } else if (step === 3) {
+      handleSubmit(e);
+    }
   };
 
   const handleBack = () => {
@@ -35,7 +50,6 @@ export default function SetupProfilePage() {
   };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
     if (!name || !phone || !address || !city || !stateVal || !country || !zipcode) {
       alert("Please fill in all details before completing.");
       return;
@@ -111,7 +125,7 @@ export default function SetupProfilePage() {
               </button>
             </div>
 
-            <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
+            <form onSubmit={handleFormSubmit} className="space-y-6">
               {/* STEP 1: Contact Details */}
               {step === 1 && (
                 <div className="space-y-4">
@@ -270,8 +284,7 @@ export default function SetupProfilePage() {
 
                 {step < 3 ? (
                   <button
-                    type="button"
-                    onClick={handleNext}
+                    type="submit"
                     className="px-6 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1 cursor-pointer ml-auto"
                   >
                     Continue <ArrowRight size={14} />

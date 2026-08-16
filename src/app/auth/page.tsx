@@ -19,6 +19,33 @@ export default function AuthPage() {
   const router = useRouter();
   const { login, signup, members } = useAuth();
 
+  const getCookieVal = (name: string): string | null => {
+    if (typeof document === "undefined") return null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return decodeURIComponent(parts.pop()?.split(";").shift() || "");
+    return null;
+  };
+
+  const checkProfileAndRedirect = (role: string) => {
+    if (role && role.startsWith("client")) {
+      router.push("/client/dashboard");
+    } else {
+      const userCookie = getCookieVal("telu_user");
+      let isComplete = false;
+      if (userCookie) {
+        try {
+          isComplete = JSON.parse(userCookie).isProfileComplete === true;
+        } catch (e) {}
+      }
+      if (!isComplete) {
+        router.push("/auth/setup-profile");
+      } else {
+        router.push("/customer/dashboard");
+      }
+    }
+  };
+
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -116,10 +143,8 @@ export default function AuthPage() {
               if (rememberMe) {
                 localStorage.setItem("telu_remember", "true");
               }
-              if (role && role.startsWith("client")) {
-                router.push("/client/dashboard");
-              } else {
-                router.push("/customer/dashboard");
+              if (role) {
+                checkProfileAndRedirect(role);
               }
             } catch (err: unknown) {
               setError("Authentication failed on backend server.");
@@ -175,10 +200,8 @@ export default function AuthPage() {
           localStorage.setItem("telu_remember", "true");
         }
         
-        if (role && role.startsWith("client")) {
-          router.push("/client/dashboard");
-        } else {
-          router.push("/customer/dashboard");
+        if (role) {
+          checkProfileAndRedirect(role);
         }
       }
     } catch (err: unknown) {
@@ -201,10 +224,8 @@ export default function AuthPage() {
 
     await login(oauthEmail, role);
     
-    if (role.startsWith("client")) {
-      router.push("/client/dashboard");
-    } else {
-      router.push("/customer/dashboard");
+    if (role) {
+      checkProfileAndRedirect(role);
     }
   };
 
