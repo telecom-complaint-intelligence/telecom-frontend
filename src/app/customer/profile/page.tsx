@@ -70,6 +70,7 @@ export default function ProfilePage() {
         setBillCycle(user.billCycle || "-");
         setActivePlan(user.activePlan || "-");
         setConnectionStatus(user.connectionStatus || "-");
+        setTempPlanUsage(user.planUsage || "");
       }, 0);
     }
   }, [user]);

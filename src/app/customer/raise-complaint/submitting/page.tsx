@@ -1,44 +1,82 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 
-export default function SubmittingComplaintPage() {
+interface ComplaintDetail {
+  id: string;
+  ticket_number: string;
+  category: string;
+  response: string;
+  status: string;
+  ai_analysis: {
+    negativity_score: number;
+    sentiment_score: number;
+  };
+  priority_scores: {
+    complexity: string;
+  };
+}
+
+function SubmittingComplaintContent() {
   const router = useRouter();
-  
-  // Triage state simulation
+  const searchParams = useSearchParams();
+  const ticketId = searchParams.get("id");
+  const { token } = useAuth();
+
+  // Triage state
   const [step, setStep] = useState(0);
   const [complete, setComplete] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [complaintData, setComplaintData] = useState<ComplaintDetail | null>(null);
 
-  // Flow control states - initial state will be randomized on mount
-  const [severity, setSeverity] = useState<"low" | "high" | "critical">("high");
+  // Flow control states
+  const [severity, setSeverity] = useState<"low" | "high" | "critical">("low");
   const [isFinalSuccess, setIsFinalSuccess] = useState(false);
   
   // Low severity follow-up states
   const [lowFlowState, setLowFlowState] = useState<"recommendation" | "feedbackForm" | "solved">("recommendation");
   const [feedbackText, setFeedbackText] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Fetch ticket details from backend
+  useEffect(() => {
+    if (!ticketId || !token) return;
+
+    fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch complaint details");
+        return res.json();
+      })
+      .then(data => {
+        setComplaintData(data);
+        const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
+        if (comp === "critical" || comp === "high") {
+          setSeverity(comp as "low" | "high" | "critical");
+        } else {
+          setSeverity("low");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+      });
+  }, [ticketId, token]);
 
   const steps = [
-    { label: "Reading complaint details", detail: "482 words analysed" },
-    { label: "Detecting issue category", detail: "Broadband performance" },
-    { label: "Analysing customer sentiment", detail: "Negative tone detected" },
-    { label: "Calculating console priority", detail: severity.toUpperCase() },
+    { label: "Reading complaint details", detail: "Analysing structure" },
+    { label: "Detecting issue category", detail: complaintData?.category || "Triage pending" },
+    { label: "Analysing customer sentiment", detail: complaintData?.ai_analysis ? `Negativity: ${(complaintData.ai_analysis.negativity_score * 100).toFixed(0)}%` : "Calculating..." },
+    { label: "Calculating console priority", detail: complaintData?.priority_scores?.complexity || "Triage pending" },
     { label: "Predicting escalation risk", detail: severity === "critical" ? "91% probability" : severity === "high" ? "78% probability" : "12% probability" },
     { label: "Generating recommended actions", detail: "Ready" },
   ];
 
-  // Reset triage animation whenever severity is switched for testing
-  const resetTriage = (newSev: "low" | "high" | "critical") => {
-    setSeverity(newSev);
-    setStep(0);
-    setProgress(0);
-    setComplete(false);
-    setIsFinalSuccess(false);
-    setLowFlowState("recommendation");
-    setFeedbackText("");
-  };
-
+  // Animation cycle
   useEffect(() => {
     if (step < steps.length) {
       const interval = setTimeout(() => {
@@ -58,52 +96,60 @@ export default function SubmittingComplaintPage() {
     }
   }, [step, severity]);
 
-  const handleSameProblem = () => {
-    setFeedbackText("Internet very slow every evening (Same issue recurring)");
-    setTimeout(() => {
-      setIsFinalSuccess(true);
-    }, 400);
+  const handleIssueSolved = async () => {
+    if (!ticketId || !token) return;
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: "CLOSED" })
+      });
+      if (response.ok) {
+        setLowFlowState("solved");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleFeedbackSubmit = (e: React.FormEvent) => {
+  const handleSameProblem = () => {
+    setFeedbackText("Internet issue is still recurring and unresolved.");
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsFinalSuccess(true);
+    if (!ticketId || !token || !feedbackText.trim()) return;
+
+    setSubmittingFeedback(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          complaint2: feedbackText,
+          status: "IN_PROGRESS"
+        })
+      });
+      if (response.ok) {
+        setIsFinalSuccess(true);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting feedback.");
+    } finally {
+      setSubmittingFeedback(false);
+    }
   };
 
   return (
     <div className="p-6 md:p-12 space-y-8 max-w-3xl w-full mx-auto font-sans relative">
       
-      {/* Triage Preview Selector */}
-      <div className="p-3 bg-[#F5EFEB] border border-border-beige rounded flex items-center justify-between text-xs">
-        <span className="font-semibold text-plum">Select Flow:</span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => resetTriage("critical")}
-            className={`px-3 py-1 rounded cursor-pointer transition-all ${
-              severity === "critical" ? "bg-[#1E0A2D] text-white font-bold" : "bg-white border border-border-beige text-plum"
-            }`}
-          >
-            Critical
-          </button>
-          <button
-            onClick={() => resetTriage("high")}
-            className={`px-3 py-1 rounded cursor-pointer transition-all ${
-              severity === "high" ? "bg-[#1E0A2D] text-white font-bold" : "bg-white border border-border-beige text-plum"
-            }`}
-          >
-            High
-          </button>
-          <button
-            onClick={() => resetTriage("low")}
-            className={`px-3 py-1 rounded cursor-pointer transition-all ${
-              severity === "low" ? "bg-[#1E0A2D] text-white font-bold" : "bg-white border border-border-beige text-plum"
-            }`}
-          >
-            Low
-          </button>
-        </div>
-      </div>
-
       {!complete ? (
         <div className="bg-card-bg border border-border-beige p-8 rounded shadow-sm space-y-6">
           <div className="flex items-center gap-2 text-accent">
@@ -152,7 +198,7 @@ export default function SubmittingComplaintPage() {
           </div>
         </div>
       ) : isFinalSuccess ? (
-        // Inline success view (replaces background details card completely)
+        // Inline success view
         <div className="bg-card-bg border border-border-beige p-8 rounded shadow-sm space-y-6 text-center animate-fade-in max-w-md mx-auto">
           <div className="flex justify-center">
             <span className="h-14 w-14 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-green-600 text-2xl font-bold">
@@ -161,12 +207,14 @@ export default function SubmittingComplaintPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-mono text-plum uppercase">Ticket Registered: CMP1025</p>
+            <p className="text-xs font-mono text-plum uppercase">Ticket Registered: {complaintData?.ticket_number || "CMP1025"}</p>
             <h2 className="text-xl font-serif font-semibold text-foreground">
-              Thx for ur time, help is on the way !
+              Thank you for your time!
             </h2>
             <p className="text-xs text-plum leading-relaxed">
-              Your complaint has been successfully flagged. A support representative will review it shortly.
+              {severity === "low" 
+                ? "Your follow-up has been registered. A support representative will review it shortly."
+                : "Your complaint has been successfully flagged. A support representative has been assigned."}
             </p>
           </div>
 
@@ -188,12 +236,12 @@ export default function SubmittingComplaintPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-serif font-semibold">Complaint submitted</h1>
-                <p className="text-sm text-plum">We have registered your issue and sent an SMS confirmation.</p>
+                <p className="text-sm text-plum">We have registered your issue and sent a confirmation.</p>
               </div>
             </div>
             <div className="text-left md:text-right font-mono text-xs text-plum">
-              <span>COMPLAINT ID</span>
-              <p className="font-semibold text-foreground mt-1">CMP1025</p>
+              <span>TICKET NUMBER</span>
+              <p className="font-semibold text-foreground mt-1">{complaintData?.ticket_number || "CMP1025"}</p>
             </div>
           </div>
 
@@ -207,11 +255,15 @@ export default function SubmittingComplaintPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border-beige border-b border-border-beige">
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Category</span>
-                <p className="font-medium text-sm">Broadband</p>
+                <p className="font-medium text-sm capitalize">{complaintData?.category || "General"}</p>
               </div>
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Sentiment</span>
-                <p className="font-medium text-sm text-red-600 font-semibold">Highly Negative</p>
+                <p className={`font-medium text-sm font-semibold ${
+                  (complaintData?.ai_analysis?.negativity_score ?? 0) > 0.6 ? "text-red-600" : "text-amber-600"
+                }`}>
+                  {(complaintData?.ai_analysis?.negativity_score ?? 0) > 0.6 ? "Highly Negative" : "Neutral / Negative"}
+                </p>
               </div>
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Priority</span>
@@ -234,14 +286,14 @@ export default function SubmittingComplaintPage() {
                     <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
                       <span className="text-xs font-mono text-accent uppercase font-bold block">Recommended Resolution</span>
                       <p className="text-sm text-plum leading-relaxed">
-                        We recommend performing a hard restart of your router. Unplug the power cable for 30 seconds and plug it back in.
+                        {complaintData?.response || "We recommend performing a hard restart of your router. Unplug the power cable for 30 seconds and plug it back in."}
                       </p>
                     </div>
 
                     <div className="flex flex-wrap gap-3 pt-2">
                       <button
                         type="button"
-                        onClick={() => setLowFlowState("solved")}
+                        onClick={handleIssueSolved}
                         className="px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-colors cursor-pointer"
                       >
                         ✓ Issue Solved
@@ -267,7 +319,7 @@ export default function SubmittingComplaintPage() {
                   <form onSubmit={handleFeedbackSubmit} className="space-y-4 animate-fade-in">
                     <div className="space-y-2">
                       <label className="text-xs font-mono text-plum uppercase block" htmlFor="recheckDesc">
-                        Please describe the issue once again:
+                        Please describe the issue once again (clarify what didn&apos;t work):
                       </label>
                       <textarea
                         id="recheckDesc"
@@ -283,9 +335,10 @@ export default function SubmittingComplaintPage() {
                     <div className="flex gap-3">
                       <button
                         type="submit"
+                        disabled={submittingFeedback}
                         className="px-4 py-2 bg-[#1E0A2D] text-white text-xs font-semibold rounded hover:opacity-90 transition-opacity cursor-pointer"
                       >
-                        Submit Issue Details
+                        {submittingFeedback ? "Submitting..." : "Submit Issue Details"}
                       </button>
                       <button
                         type="button"
@@ -313,5 +366,13 @@ export default function SubmittingComplaintPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SubmittingComplaintPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-sm text-plum">Loading triage console...</div>}>
+      <SubmittingComplaintContent />
+    </Suspense>
   );
 }
