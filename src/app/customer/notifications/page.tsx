@@ -98,18 +98,7 @@ export default function NotificationsPage() {
           }
         });
 
-        // Add dynamic network maintenance notification if user has a city
-        if (user?.city) {
-          const maintenanceId = `maintenance-${user.city}`;
-          generated.push({
-            id: maintenanceId,
-            title: `Scheduled Network Maintenance`,
-            message: `Service upgrades scheduled in ${user.city} between 1 AM and 4 AM next Tuesday. Expect brief outages.`,
-            time: "System Alert",
-            type: "system",
-            unread: !readIds.includes(maintenanceId)
-          });
-        }
+
 
         // Sort: show unread first
         generated.sort((a, b) => {
