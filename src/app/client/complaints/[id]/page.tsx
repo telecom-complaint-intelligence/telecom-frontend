@@ -31,6 +31,7 @@ interface ComplaintDetail {
     negativity_score: number;
     sentiment_score: number;
     confidence_score?: number | null;
+    solution_high?: string | null;
     diagnosis: string | null;
     root_cause: string | null;
     risk_level: string | null;
@@ -125,13 +126,18 @@ export default function ClientComplaintIntelligencePage() {
   }
 
   const complexity = complaint.priority_scores?.complexity || "LOW";
-  const targetMatch = user?.id || "OPS-ADMIN";
+  const targetMatch = user?.id
+    ? user.id.startsWith("CUST-")
+      ? user.id.replace("CUST-", "OPS-")
+      : user.id
+    : "OPS-ADMIN";
 
   // Helper to format date strings cleanly
   const formatTime = (dateStr?: string | null, fallback: string = "Recent") => {
     if (!dateStr) return fallback;
     try {
-      return new Date(dateStr).toLocaleString("en-IN", {
+      const isoStr = dateStr.endsWith("Z") || dateStr.includes("+") ? dateStr : `${dateStr}Z`;
+      return new Date(isoStr).toLocaleString("en-IN", {
         day: "2-digit",
         month: "short",
         hour: "2-digit",
@@ -172,11 +178,14 @@ export default function ClientComplaintIntelligencePage() {
   }
 
   if (complaint.status === "RESOLVED" || complaint.status === "CLOSED") {
+    const isOps = complaint.resolved_by?.startsWith("OPS-") || complaint.resolved_by?.startsWith("ADMIN");
     events.push({
-      title: "Complaint Resolved",
-      desc: `Ticket marked as resolved in operations database${complaint.resolved_by ? ` by ${complaint.resolved_by}` : ""}.`,
+      title: complaint.status === "CLOSED" && !isOps ? "Complaint Closed" : "Complaint Resolved",
+      desc: complaint.status === "CLOSED" && !isOps
+        ? `Ticket marked as closed by Customer (${complaint.resolved_by || "User"}). Reason: "${complaint.complaint2 || "No reason provided"}"`
+        : `Ticket marked as resolved in operations database${complaint.resolved_by ? ` by ${complaint.resolved_by}` : ""}.`,
       time: formatTime(complaint.closing_time_stamp, "Closed"),
-      tag: "Operator"
+      tag: isOps ? "Operator" : "Customer"
     });
   }
 
@@ -282,6 +291,26 @@ export default function ClientComplaintIntelligencePage() {
             )}
           </div>
 
+          {/* AI Recommended Resolution Card */}
+          {complaint.response && (
+            <div className="bg-card-bg border border-border-beige p-6 rounded shadow-sm space-y-4 animate-fade-in">
+              <h2 className="text-sm font-mono uppercase tracking-wider text-plum flex items-center gap-1.5 font-bold">
+                ✨ AI Suggested Resolution
+              </h2>
+              <div className="p-4 bg-[#F5EFEB] border-l-2 border-purple-500 rounded text-sm text-plum font-serif leading-relaxed">
+                {complaint.response}
+              </div>
+              {complaint.ai_analysis?.solution_high && (
+                <div className="space-y-2 border-t border-border-beige pt-4">
+                  <span className="text-[10px] font-mono text-plum uppercase block">Escalated Action Plan</span>
+                  <div className="p-4 bg-red-50/50 border-l-2 border-red-500 rounded text-sm text-plum font-serif leading-relaxed">
+                    {complaint.ai_analysis.solution_high}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Dynamic Event Triage Feed */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
             <div className="p-5 border-b border-border-beige">
@@ -359,6 +388,12 @@ export default function ClientComplaintIntelligencePage() {
                 <span className="text-plum uppercase">SLA Target</span>
                 <span className="font-semibold text-foreground uppercase">{complexity === "CRITICAL" ? "2 Hours" : complexity === "HIGH" ? "4 Hours" : "8 Hours"}</span>
               </div>
+              {(complaint.status === "RESOLVED" || complaint.status === "CLOSED") && complaint.resolved_by && (
+                <div className="py-3 flex justify-between font-mono text-[10px] border-t border-border-beige pt-3">
+                  <span className="text-plum uppercase">Resolved By</span>
+                  <span className="font-semibold text-foreground font-mono">{complaint.resolved_by.replace("CUST-", "OPS-")}</span>
+                </div>
+              )}
             </dl>
           </div>
 

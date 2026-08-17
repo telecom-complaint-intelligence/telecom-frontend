@@ -39,7 +39,7 @@ interface ComplaintDetail {
 export default function ComplaintDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const id = params.id as string;
 
   const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
@@ -49,6 +49,12 @@ export default function ComplaintDetailsPage() {
   const [lowFlowState, setLowFlowState] = useState<"recommendation" | "feedbackForm" | "solved">("recommendation");
   const [feedbackText, setFeedbackText] = useState("");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Close Complaint States
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [confirmInput, setConfirmInput] = useState("");
+  const [closing, setClosing] = useState(false);
 
   const fetchComplaintDetails = async () => {
     if (!id || !token) return;
@@ -140,6 +146,37 @@ export default function ComplaintDetailsPage() {
     }
   };
 
+  const handleCloseComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !user?.id) return;
+    if (confirmInput !== user.id) return;
+    setClosing(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: "CLOSED",
+          resolved_by: user.id,
+          complaint2: closeReason
+        })
+      });
+      if (response.ok) {
+        setIsCloseModalOpen(false);
+        setCloseReason("");
+        setConfirmInput("");
+        await fetchComplaintDetails();
+      }
+    } catch (err) {
+      console.error("Error closing complaint:", err);
+    } finally {
+      setClosing(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="p-6 md:p-12 text-center text-sm text-plum max-w-6xl w-full mx-auto font-sans">
@@ -193,14 +230,24 @@ export default function ComplaintDetailsPage() {
           <span className="text-xs font-mono text-plum uppercase block">COMPLAINT ID: {id}</span>
           <h1 className="text-3xl font-serif font-normal capitalize">{complaint.complaint1}</h1>
         </div>
-        <span className={`text-xs font-mono font-semibold px-3 py-1.5 rounded uppercase self-start md:self-center border ${
-          complaint.status === "OPEN" ? "bg-red-50 text-red-700 border-red-200" :
-          complaint.status === "IN_PROGRESS" ? "bg-amber-50 text-amber-700 border-amber-200" :
-          complaint.status === "ESCALATED" ? "bg-purple-50 text-purple-700 border-purple-200 animate-pulse" :
-          "bg-green-50 text-green-700 border-green-200"
-        }`}>
-          {complaint.status}
-        </span>
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
+          {complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+            <button
+              onClick={() => setIsCloseModalOpen(true)}
+              className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-semibold rounded cursor-pointer transition-colors"
+            >
+              Close Complaint
+            </button>
+          )}
+          <span className={`text-xs font-mono font-semibold px-3 py-1.5 rounded uppercase border ${
+            complaint.status === "OPEN" ? "bg-red-50 text-red-700 border-red-200" :
+            complaint.status === "IN_PROGRESS" ? "bg-amber-50 text-amber-700 border-amber-200" :
+            complaint.status === "ESCALATED" ? "bg-purple-50 text-purple-700 border-purple-200 animate-pulse" :
+            "bg-green-50 text-green-700 border-green-200"
+          }`}>
+            {complaint.status}
+          </span>
+        </div>
       </div>
 
       {/* Grid details */}
@@ -382,6 +429,73 @@ export default function ComplaintDetailsPage() {
 
         </div>
       </div>
+
+      {/* Customer Close Confirmation Modal */}
+      {isCloseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <form onSubmit={handleCloseComplaint} className="w-full max-w-md bg-background border border-border-beige p-6 rounded shadow-2xl space-y-4 text-left">
+            <div className="border-b border-border-beige pb-3">
+              <h2 className="text-lg font-serif font-semibold text-foreground">Close Complaint Ticket</h2>
+              <p className="text-xs text-plum mt-1">
+                Please provide a brief reason for closing this ticket, and enter your customer ID to confirm.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-mono text-plum uppercase block" htmlFor="closeReasonInput">
+                  Reason for Closing:
+                </label>
+                <textarea
+                  id="closeReasonInput"
+                  required
+                  rows={3}
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  placeholder="Service restored / Resolved by self / No longer required..."
+                  className="w-full px-4 py-2 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm text-foreground"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-mono text-plum uppercase block" htmlFor="customerIdConfirm">
+                  Type your Customer ID <strong className="text-foreground font-mono select-none">&quot;{user?.id}&quot;</strong> to confirm:
+                </label>
+                <input
+                  id="customerIdConfirm"
+                  type="text"
+                  required
+                  value={confirmInput}
+                  onChange={(e) => setConfirmInput(e.target.value)}
+                  placeholder={user?.id || ""}
+                  className="w-full px-4 py-2 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm font-mono text-foreground"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCloseModalOpen(false);
+                  setCloseReason("");
+                  setConfirmInput("");
+                }}
+                className="px-4 py-2 border border-border-beige hover:bg-[#F5EFEB] text-plum text-xs font-semibold rounded cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={confirmInput !== user?.id || closing}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {closing ? "Closing..." : "Confirm & Close"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }
