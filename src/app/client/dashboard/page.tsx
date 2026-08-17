@@ -25,27 +25,34 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (!token) return;
 
-    // 1. Fetch complaints
-    fetch("http://localhost:8000/api/v1/complaints", {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to load complaints");
-        return res.json();
+    const fetchComplaints = () => {
+      fetch("http://localhost:8000/api/v1/complaints", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       })
-      .then(data => {
-        setTickets(data);
-      })
-      .catch(err => {
-        console.error("Dashboard load error:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to load complaints");
+          return res.json();
+        })
+        .then(data => {
+          setTickets(data);
+        })
+        .catch(err => {
+          console.error("Dashboard load error:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
 
-    // 2. Fetch operators count
+    // Initial fetch
+    fetchComplaints();
+
+    // Set up polling interval to fetch dynamically every 5 seconds
+    const intervalId = setInterval(fetchComplaints, 5000);
+
+    // Fetch operators count
     getOperators()
       .then(ops => {
         if (ops) setOperatorCount(ops.length);
@@ -53,6 +60,8 @@ export default function ClientDashboard() {
       .catch(err => {
         console.error("Error loading operators count:", err);
       });
+
+    return () => clearInterval(intervalId);
   }, [token, getOperators]);
 
   // Compute stats dynamically
@@ -62,7 +71,7 @@ export default function ClientDashboard() {
     return complexity === "HIGH" || complexity === "CRITICAL";
   }).length;
 
-  const latestActiveQueue = activeTickets.slice(-5).reverse();
+  const latestActiveQueue = activeTickets.slice(0, 5);
 
   return (
     <main className="p-6 md:p-12 space-y-8 max-w-6xl w-full mx-auto font-sans">
