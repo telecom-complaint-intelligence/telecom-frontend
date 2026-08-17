@@ -10,6 +10,7 @@ interface ComplaintDetail {
   category: string;
   response: string;
   status: string;
+  complaint1?: string;
   ai_analysis: {
     negativity_score: number;
     sentiment_score: number;
@@ -87,28 +88,48 @@ function SubmittingComplaintContent() {
     } else {
       const timer = setTimeout(() => {
         setComplete(true);
-        // High/Critical severity immediately routes to inline success state
-        if (severity === "high" || severity === "critical") {
-          setIsFinalSuccess(true);
-        }
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [step, severity]);
+  }, [step]);
+
+  const fetchLatestTicketDetails = async () => {
+    if (!ticketId || !token) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComplaintData(data);
+        const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
+        if (comp === "critical" || comp === "high") {
+          setSeverity(comp as "low" | "high" | "critical");
+        } else {
+          setSeverity("low");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching latest details:", err);
+    }
+  };
 
   const handleIssueSolved = async () => {
     if (!ticketId || !token) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
-        method: "PATCH",
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}/feedback`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ status: "CLOSED" })
+        body: JSON.stringify({ customer_feedback: true })
       });
       if (response.ok) {
         setLowFlowState("solved");
+        await fetchLatestTicketDetails();
       }
     } catch (err) {
       console.error(err);
@@ -116,7 +137,11 @@ function SubmittingComplaintContent() {
   };
 
   const handleSameProblem = () => {
-    setFeedbackText("Internet issue is still recurring and unresolved.");
+    if (complaintData?.complaint1) {
+      setFeedbackText(`"${complaintData.complaint1}" is still recurring and unresolved.`);
+    } else {
+      setFeedbackText("Internet issue is still recurring and unresolved.");
+    }
   };
 
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
@@ -125,7 +150,8 @@ function SubmittingComplaintContent() {
 
     setSubmittingFeedback(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
+      // 1. Update the follow-up complaint text
+      await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -136,8 +162,22 @@ function SubmittingComplaintContent() {
           status: "IN_PROGRESS"
         })
       });
+
+      // 2. Submit negative feedback to trigger AI Escalation & High Council
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${ticketId}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ customer_feedback: false })
+      });
+
       if (response.ok) {
-        setIsFinalSuccess(true);
+        // Refetch latest details to display the escalated technician plan
+        await fetchLatestTicketDetails();
+      } else {
+        alert("Escalation failed. Proceeding with standard update.");
       }
     } catch (err) {
       console.error(err);
@@ -252,18 +292,10 @@ function SubmittingComplaintContent() {
               <h2 className="text-base font-serif font-semibold">Triage Readouts</h2>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border-beige border-b border-border-beige">
+            <div className="grid grid-cols-1 md:grid-cols-3 divide-x divide-border-beige border-b border-border-beige">
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Category</span>
                 <p className="font-medium text-sm capitalize">{complaintData?.category || "General"}</p>
-              </div>
-              <div className="p-5 space-y-1">
-                <span className="text-[10px] font-mono text-plum uppercase block">Sentiment</span>
-                <p className={`font-medium text-sm font-semibold ${
-                  (complaintData?.ai_analysis?.negativity_score ?? 0) > 0.6 ? "text-red-600" : "text-amber-600"
-                }`}>
-                  {(complaintData?.ai_analysis?.negativity_score ?? 0) > 0.6 ? "Highly Negative" : "Neutral / Negative"}
-                </p>
               </div>
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Priority</span>
@@ -278,7 +310,7 @@ function SubmittingComplaintContent() {
             </div>
 
             {/* Content view based on Severity */}
-            {severity === "low" && (
+            {severity === "low" && complaintData?.status !== "ESCALATED" ? (
               // Low Severity Flow with Recommendations
               <div className="p-6 space-y-6">
                 {lowFlowState === "recommendation" && (
@@ -350,6 +382,16 @@ function SubmittingComplaintContent() {
                     </div>
                   </form>
                 )}
+              </div>
+            ) : (
+              /* Escalated / High Severity Status Card */
+              <div className="p-6 space-y-6">
+                <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
+                  <span className="text-xs font-mono text-accent uppercase font-bold block">Assigned resolution</span>
+                  <p className="text-sm text-plum leading-relaxed white-space-pre-line">
+                    {complaintData?.response || "A technician dispatch is scheduled to restore your services."}
+                  </p>
+                </div>
               </div>
             )}
           </div>
