@@ -1,61 +1,183 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Clock, ShieldAlert, CheckCircle, Send, Paperclip, User } from "lucide-react";
+import { ArrowLeft, Clock, ShieldAlert, CheckCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 
-interface Comment {
-  author: string;
-  role: "Customer" | "Operator" | "System" | "Internal Note";
-  message: string;
-  time: string;
+interface ComplaintDetail {
+  id: string;
+  ticket_number: string;
+  user_id?: string | null;
+  complaint1: string;
+  complaint2: string | null;
+  response: string | null;
+  status: string;
+  category: string;
+  created_at: string;
+  resolved_by?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  response_timestamp?: string | null;
+  follow_up_timestamp?: string | null;
+  closing_time_stamp?: string | null;
+  complaint_address?: {
+    city?: string;
+    phone?: string;
+  } | null;
+  ai_analysis?: {
+    negativity_score: number;
+    sentiment_score: number;
+    diagnosis: string | null;
+    root_cause: string | null;
+    risk_level: string | null;
+  } | null;
+  priority_scores?: {
+    complexity: string;
+    total_complexity_score: number;
+  } | null;
 }
 
 export default function ClientComplaintIntelligencePage() {
-  const { user } = useAuth();
+  const { token, user } = useAuth();
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
 
-  const [activeTab, setActiveTab] = useState<"reply" | "note">("reply");
-  const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState<Comment[]>([
-    { author: "Arjun Raman", role: "Customer", message: "Raised this complaint through the portal with a speed test screenshot attached.", time: "11 AUG, 20:05" },
-    { author: "Uplink Triage", role: "System", message: "Classified as Broadband performance · sentiment highly negative · priority high · escalation risk 78%. Routed to Broadband Support.", time: "11 AUG, 20:05" },
-    { author: "Vinoth K.", role: "Operator", message: "Ran a remote line test. 11 Mbps against a 100 Mbps plan. Fault sits outside the premises.", time: "11 AUG, 21:30" },
-    { author: "Vinoth K.", role: "Internal Note", message: "Fourth report from MDU-04 tonight. Suspect shared capacity issue at the exchange rather than individual lines.", time: "11 AUG, 21:34" },
-    { author: "Arjun Raman", role: "Customer", message: "Thanks. Any idea how long this will take? I have client calls all week.", time: "TODAY, 08:40" },
-  ]);
+  const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [triageSteps, setTriageSteps] = useState([
-    { id: 1, text: "Check network availability at exchange MDU-04", done: false },
-    { id: 2, text: "Verify router connectivity and line sync", done: false },
-    { id: 3, text: "Check for a known outage in the area", done: false },
-    { id: 4, text: "Escalate to Network Operations if unresolved", done: false },
-  ]);
+  // Resolution Modal States (GitHub style confirmation)
+  const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
+  const [confirmInput, setConfirmInput] = useState("");
 
-  const handlePostComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
-
-    const newComment: Comment = {
-      author: user?.name || user?.email?.split("@")[0].toUpperCase() || "Priya S.",
-      role: activeTab === "note" ? "Internal Note" : "Operator",
-      message: commentText,
-      time: "Just now",
-    };
-
-    setComments([...comments, newComment]);
-    setCommentText("");
+  const fetchComplaintDetails = async () => {
+    if (!id || !token) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComplaint(data);
+      }
+    } catch (err) {
+      console.error("Error fetching complaint:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleTriageStep = (id: number) => {
-    setTriageSteps(
-      triageSteps.map(step => (step.id === id ? { ...step, done: !step.done } : step))
+  useEffect(() => {
+    fetchComplaintDetails();
+  }, [id, token]);
+
+  const updateStatus = async (nextStatus: "IN_PROGRESS" | "ESCALATED" | "RESOLVED", resolvedBy?: string) => {
+    if (!token) return;
+    try {
+      const payload: { status: string; resolved_by?: string } = { status: nextStatus };
+      if (resolvedBy) {
+        payload.resolved_by = resolvedBy;
+      }
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        fetchComplaintDetails();
+      }
+    } catch (err) {
+      console.error("Error updating status:", err);
+    }
+  };
+
+  const handleConfirmResolve = async () => {
+    const targetMatch = user?.id || "OPS-ADMIN";
+    if (confirmInput !== targetMatch) return;
+    await updateStatus("RESOLVED", targetMatch);
+    setIsResolveModalOpen(false);
+    setConfirmInput("");
+  };
+
+  if (loading) {
+    return (
+      <main className="p-6 md:p-12 text-center text-sm text-plum max-w-7xl w-full mx-auto font-sans">
+        Loading ticket intelligence...
+      </main>
     );
+  }
+
+  if (!complaint) {
+    return (
+      <main className="p-6 md:p-12 text-center text-sm text-plum max-w-7xl w-full mx-auto font-sans">
+        Ticket not found.
+      </main>
+    );
+  }
+
+  const complexity = complaint.priority_scores?.complexity || "LOW";
+  const targetMatch = user?.id || "OPS-ADMIN";
+
+  // Helper to format date strings cleanly
+  const formatTime = (dateStr?: string | null, fallback: string = "Recent") => {
+    if (!dateStr) return fallback;
+    try {
+      return new Date(dateStr).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+    } catch {
+      return fallback;
+    }
   };
+
+  // Build a timeline of dynamic actions that actually exist
+  const events = [
+    {
+      title: "Complaint Registered",
+      desc: `Customer raised a complaint: "${complaint.complaint1}"`,
+      time: formatTime(complaint.created_at),
+      tag: "Customer"
+    }
+  ];
+
+  if (complaint.response) {
+    events.push({
+      title: "AI Recommendation Offered",
+      desc: complaint.response,
+      time: formatTime(complaint.response_timestamp, "Initial Triage"),
+      tag: "System"
+    });
+  }
+
+  if (complaint.complaint2) {
+    events.push({
+      title: "Customer Follow-Up Reported",
+      desc: complaint.complaint2,
+      time: formatTime(complaint.follow_up_timestamp, "Follow-up"),
+      tag: "Customer"
+    });
+  }
+
+  if (complaint.status === "RESOLVED" || complaint.status === "CLOSED") {
+    events.push({
+      title: "Complaint Resolved",
+      desc: `Ticket marked as resolved in operations database${complaint.resolved_by ? ` by ${complaint.resolved_by}` : ""}.`,
+      time: formatTime(complaint.closing_time_stamp, "Closed"),
+      tag: "Operator"
+    });
+  }
 
   return (
     <main className="p-6 md:p-12 space-y-8 max-w-7xl w-full mx-auto font-sans">
@@ -65,195 +187,140 @@ export default function ClientComplaintIntelligencePage() {
           <ArrowLeft size={12} /> Complaints
         </Link>
         <span>/</span>
-        <span className="text-foreground font-semibold">{id}</span>
+        <span className="text-foreground font-semibold">{complaint.ticket_number || id.substring(0, 8)}</span>
       </div>
 
       {/* Action Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-border-beige pb-6">
         <div className="space-y-1">
           <span className="text-xs font-mono text-plum uppercase block">CMP ID: {id}</span>
-          <h1 className="text-2xl font-serif font-bold">Slow internet connection</h1>
-          <p className="text-xs text-plum font-mono flex items-center gap-1.5 mt-1 text-red-600">
-            <Clock size={12} /> SLA response due in 1h 20m
-          </p>
+          <h1 className="text-2xl font-serif font-bold capitalize">{complaint.complaint1}</h1>
         </div>
+        
         <div className="flex flex-wrap gap-3">
-          <button className="px-4 py-2 border border-border-beige hover:bg-card-bg text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer">
-            <User size={12} /> Assign agent
-          </button>
-          <button className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer">
-            <ShieldAlert size={12} /> Escalate
-          </button>
-          <button className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer">
-            <CheckCircle size={12} /> Resolve complaint
-          </button>
+          {complaint.status === "OPEN" && (
+            <button
+              onClick={() => updateStatus("IN_PROGRESS")}
+              className="px-4 py-2 border border-border-beige hover:bg-card-bg text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer"
+            >
+              Process Ticket
+            </button>
+          )}
+          {complaint.status !== "ESCALATED" && complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+            <button
+              onClick={() => updateStatus("ESCALATED")}
+              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShieldAlert size={12} /> Escalate
+            </button>
+          )}
+          {complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+            <button
+              onClick={() => {
+                setIsResolveModalOpen(true);
+                setConfirmInput("");
+              }}
+              className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckCircle size={12} /> Resolve complaint
+            </button>
+          )}
         </div>
       </div>
 
       {/* Detailed Triage Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Column: Customer details & log */}
+        {/* Left Column: Customer details & statement */}
         <div className="lg:col-span-2 space-y-8">
           
           {/* Customer profile card */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
             <div className="p-5 border-b border-border-beige flex items-center justify-between gap-4">
               <h2 className="text-base font-serif font-semibold">Customer Account</h2>
-              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                HIGH ESCALATION RISK
+              <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border uppercase ${
+                complexity === "CRITICAL" || complexity === "HIGH" ? "bg-red-50 text-red-700 border-red-200" : "bg-gray-100 text-gray-700 border-gray-200"
+              }`}>
+                {complexity} ESCALATION RISK
               </span>
             </div>
-            <div className="p-6 flex items-center gap-4 border-b border-border-beige">
-              <div className="h-12 w-12 rounded-full bg-accent-light text-accent flex items-center justify-center text-lg font-serif">
-                AR
-              </div>
-              <div>
-                <p className="font-semibold">Arjun Raman</p>
-                <p className="text-xs text-plum">CUST-88214 · Customer since Mar 2024</p>
-              </div>
-            </div>
+            
             <dl className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border-beige border-b border-border-beige text-xs">
               <div className="p-4 space-y-1">
-                <span className="text-[10px] font-mono text-plum uppercase block">Phone</span>
-                <p className="font-medium">+91 90XXXX 4821</p>
+                <span className="text-[10px] font-mono text-plum uppercase block">Customer Name</span>
+                <p className="font-medium text-foreground">{complaint.customer_name || "Valued Customer"}</p>
               </div>
               <div className="p-4 space-y-1">
-                <span className="text-[10px] font-mono text-plum uppercase block">Location</span>
-                <p className="font-medium">Madurai (MDU-04)</p>
+                <span className="text-[10px] font-mono text-plum uppercase block">Account Identifier</span>
+                <p className="font-medium font-mono text-accent">{complaint.user_id || "Anonymous Client"}</p>
               </div>
               <div className="p-4 space-y-1">
-                <span className="text-[10px] font-mono text-plum uppercase block">Plan</span>
-                <p className="font-medium">Fibre 100 Mbps</p>
+                <span className="text-[10px] font-mono text-plum uppercase block">Contact Phone</span>
+                <p className="font-medium">{complaint.customer_phone || complaint.complaint_address?.phone || "Not Provided"}</p>
               </div>
               <div className="p-4 space-y-1">
-                <span className="text-[10px] font-mono text-plum uppercase block">History</span>
-                <p className="font-medium text-red-600 font-semibold">3 open tickets</p>
+                <span className="text-[10px] font-mono text-plum uppercase block">Region Location</span>
+                <p className="font-medium">{complaint.complaint_address?.city || "Tamil Nadu, India"}</p>
               </div>
             </dl>
-            <div className="p-4 bg-[#F5EFEB] text-xs text-plum font-serif flex items-center gap-3">
-              <span className="font-bold text-foreground shrink-0">Historical Alert:</span>
-              <p>6 of his last 12 complaints were broadband. Two reopened after resolution.</p>
-            </div>
           </div>
 
-          {/* Ticket Description */}
+          {/* Ticket Statement Description */}
           <div className="bg-card-bg border border-border-beige p-6 rounded shadow-sm space-y-4">
             <h2 className="text-sm font-mono uppercase tracking-wider text-plum">Complaint Statement</h2>
-            <div className="p-4 bg-background border-l-2 border-border-beige rounded text-sm text-plum font-serif leading-relaxed">
-              Speeds drop to almost nothing after 7pm every day for the past week. Fine in the mornings. Restarted the router twice, no change. Wired and wifi are both affected. I work from home in the evenings and video calls keep freezing.
+            <div className="p-4 bg-background border-l-2 border-border-beige rounded text-sm text-plum font-serif leading-relaxed capitalize">
+              {complaint.complaint1}
             </div>
-            <div className="flex gap-2">
-              <span className="text-[10px] font-mono bg-background border border-border-beige px-2 py-1 rounded cursor-pointer">
-                📎 speedtest-evening.png
-              </span>
-            </div>
+            {complaint.complaint2 && (
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono text-plum uppercase block">Follow-up Symptoms reported</span>
+                <div className="p-4 bg-background border-l-2 border-border-beige rounded text-sm text-plum font-serif leading-relaxed capitalize">
+                  {complaint.complaint2}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Activity Log */}
+          {/* Dynamic Event Triage Feed */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
             <div className="p-5 border-b border-border-beige">
               <h2 className="text-base font-serif font-semibold">Triage Feed</h2>
             </div>
             <div className="p-6 space-y-6 relative before:absolute before:left-[27px] before:top-6 before:bottom-6 before:w-px before:bg-border-beige">
-              {comments.map((c, idx) => (
-                <div
-                  key={idx}
-                  className={`relative pl-10 flex items-start gap-3 text-sm ${
-                    c.role === "Internal Note" ? "bg-amber-50/20 p-2 rounded-lg -ml-2" : ""
-                  }`}
-                >
-                  <span
-                    className={`absolute left-[3px] top-1.5 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-serif font-bold ${
-                      c.role === "Internal Note"
-                        ? "bg-amber-100 text-amber-800 border border-amber-200"
-                        : c.role === "System"
-                        ? "bg-purple-100 text-accent border border-purple-200"
-                        : "bg-[#F5EFEB] border border-border-beige text-accent"
-                    }`}
-                  >
-                    {c.author.slice(0, 2).toUpperCase()}
+              {events.map((e, idx) => (
+                <div key={idx} className="relative pl-10 flex items-start gap-3 text-sm">
+                  <span className={`absolute left-[3px] top-1.5 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-serif font-bold ${
+                    e.tag === "System"
+                      ? "bg-purple-100 text-accent border border-purple-200"
+                      : e.tag === "Operator"
+                      ? "bg-green-100 text-green-800 border border-green-200"
+                      : "bg-[#F5EFEB] border border-border-beige text-accent"
+                  }`}>
+                    {e.tag.slice(0, 2).toUpperCase()}
                   </span>
                   <div className="space-y-1 w-full">
                     <div className="flex justify-between items-baseline gap-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{c.author}</span>
-                        <span
-                          className={`text-[9px] font-mono uppercase px-1.5 rounded ${
-                            c.role === "Internal Note"
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-[#F5EFEB] text-plum"
-                          }`}
-                        >
-                          {c.role}
+                        <span className="font-semibold text-foreground">{e.title}</span>
+                        <span className="text-[9px] font-mono uppercase px-1.5 rounded bg-[#F5EFEB] text-plum">
+                          {e.tag}
                         </span>
                       </div>
-                      <span className="text-[10px] font-mono text-plum/70">{c.time}</span>
+                      <span className="text-[10px] font-mono text-plum/70">{e.time}</span>
                     </div>
-                    <p className="text-plum leading-relaxed text-xs">{c.message}</p>
+                    <p className="text-plum leading-relaxed text-xs capitalize">{e.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Composer */}
-            <form onSubmit={handlePostComment} className="p-4 bg-[#F5EFEB] border-t border-border-beige space-y-3">
-              <div className="flex gap-2 text-xs font-mono">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("reply")}
-                  className={`px-3 py-1.5 rounded-t cursor-pointer ${
-                    activeTab === "reply" ? "bg-white border border-border-beige border-b-transparent" : "text-plum"
-                  }`}
-                >
-                  Reply to Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("note")}
-                  className={`px-3 py-1.5 rounded-t cursor-pointer ${
-                    activeTab === "note" ? "bg-white border border-border-beige border-b-transparent" : "text-plum"
-                  }`}
-                >
-                  Internal Note
-                </button>
-              </div>
-              <div className="bg-white p-3 border border-border-beige rounded space-y-3">
-                <textarea
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder={
-                    activeTab === "note"
-                      ? "Write an internal note for staff..."
-                      : "Write a reply to the customer..."
-                  }
-                  rows={3}
-                  className="w-full text-xs focus:outline-none resize-none"
-                />
-                <div className="flex justify-between items-center border-t border-border-beige pt-2">
-                  <button
-                    type="button"
-                    className="text-xs text-plum hover:text-foreground flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Paperclip size={12} /> Attach files
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Send size={12} /> {activeTab === "note" ? "Save Note" : "Send Reply"}
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
 
         </div>
 
-        {/* Right Column: AI & Copilot */}
+        {/* Right Column: AI Intel */}
         <div className="space-y-6">
           
-          {/* AI analytics summary */}
+          {/* Triage Intel summary */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
             <div className="p-5 border-b border-border-beige">
               <h2 className="text-base font-serif font-semibold">Triage Intel</h2>
@@ -261,11 +328,15 @@ export default function ClientComplaintIntelligencePage() {
             
             <div className="grid grid-cols-2 divide-x divide-border-beige border-b border-border-beige text-center">
               <div className="p-5 space-y-1">
-                <span className="text-3xl font-serif font-bold text-red-600">78%</span>
+                <span className="text-3xl font-serif font-bold text-red-600">
+                  {complaint.ai_analysis?.negativity_score ? `${(complaint.ai_analysis.negativity_score * 100).toFixed(0)}%` : "N/A"}
+                </span>
                 <span className="text-[10px] font-mono text-plum uppercase block">Escalation Risk</span>
               </div>
               <div className="p-5 space-y-1">
-                <span className="text-3xl font-serif font-bold text-green-600">92%</span>
+                <span className="text-3xl font-serif font-bold text-green-600">
+                  {complaint.ai_analysis?.sentiment_score ? `${(complaint.ai_analysis.sentiment_score * 100).toFixed(0)}%` : "N/A"}
+                </span>
                 <span className="text-[10px] font-mono text-plum uppercase block">Confidence</span>
               </div>
             </div>
@@ -273,56 +344,93 @@ export default function ClientComplaintIntelligencePage() {
             <dl className="p-5 space-y-3 text-xs divide-y divide-border-beige">
               <div className="pb-3 flex justify-between">
                 <span className="font-mono text-plum uppercase">Detected Category</span>
-                <span className="font-semibold text-foreground">Broadband</span>
+                <span className="font-semibold text-foreground capitalize">{complaint.category || "General"}</span>
               </div>
               <div className="py-3 flex justify-between">
                 <span className="font-mono text-plum uppercase">Sentiment analysis</span>
-                <span className="font-semibold text-red-600">Highly Negative</span>
+                <span className={`font-semibold uppercase ${
+                  complaint.ai_analysis?.risk_level === "CRITICAL" || complaint.ai_analysis?.risk_level === "HIGH" ? "text-red-600" : "text-amber-600"
+                }`}>
+                  {complaint.ai_analysis?.risk_level || "NEUTRAL"}
+                </span>
               </div>
-              <div className="py-3 flex justify-between">
-                <span className="font-mono text-plum uppercase">SLA response time</span>
-                <span className="font-semibold text-foreground">4 Hours</span>
+              <div className="py-3 flex justify-between font-mono text-[10px]">
+                <span className="text-plum uppercase">SLA Target</span>
+                <span className="font-semibold text-foreground uppercase">{complexity === "CRITICAL" ? "2 Hours" : complexity === "HIGH" ? "4 Hours" : "8 Hours"}</span>
               </div>
             </dl>
           </div>
 
-          {/* Copilot Actionable Box */}
+          {/* AI diagnosis & root cause */}
           <div className="bg-[#1E0A2D] text-white border border-[#2F1442] rounded shadow-sm p-6 space-y-4">
             <div className="flex items-center gap-2 text-accent">
               <span className="h-2 w-2 rounded-full bg-accent animate-ping"></span>
-              <span className="text-[10px] font-mono uppercase tracking-wider">Triage Copilot</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider">Triage Diagnosis</span>
             </div>
-            <p className="text-xs text-[#C4D4DC] leading-relaxed">
-              <b>I suggest redirecting to Network Operations.</b> This customer has a history of reopens, and a local node capacity overload is currently active at tower MDU-04. Sending a technician to the address will likely result in a wasted dispatch.
-            </p>
-
-            <div className="space-y-2 pt-2">
-              <p className="text-[10px] font-mono text-[#8494A0] uppercase">Recommended Actions</p>
-              <div className="space-y-2">
-                {triageSteps.map(step => (
-                  <label key={step.id} className="flex items-start gap-2.5 text-xs text-[#C4D4DC] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={step.done}
-                      onChange={() => toggleTriageStep(step.id)}
-                      className="mt-0.5 accent-accent"
-                    />
-                    <span className={step.done ? "line-through text-plum" : ""}>{step.text}</span>
-                  </label>
-                ))}
+            {complaint.ai_analysis?.diagnosis ? (
+              <div className="space-y-3">
+                <p className="text-xs text-[#C4D4DC] leading-relaxed font-serif">
+                  <b>Diagnosis:</b> {complaint.ai_analysis.diagnosis}
+                </p>
+                {complaint.ai_analysis.root_cause && (
+                  <p className="text-xs text-[#C4D4DC] leading-relaxed border-t border-[#2F1442] pt-2 font-serif">
+                    <b>Root Cause:</b> {complaint.ai_analysis.root_cause}
+                  </p>
+                )}
               </div>
-            </div>
-
-            <button
-              type="button"
-              className="w-full py-2 bg-accent hover:opacity-90 text-[#04241E] text-xs font-semibold rounded transition-opacity cursor-pointer text-center"
-            >
-              Apply Recommended Route
-            </button>
+            ) : (
+              <p className="text-xs text-[#C4D4DC] leading-relaxed">
+                Triage Diagnosis data is not available. Please verify connection to the AI service.
+              </p>
+            )}
           </div>
 
         </div>
       </div>
+
+      {/* Resolution Confirmation Modal */}
+      {isResolveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-background border border-border-beige p-6 rounded shadow-2xl space-y-4">
+            <div className="border-b border-border-beige pb-3">
+              <h2 className="text-lg font-serif font-semibold text-foreground">Confirm Complaint Resolution</h2>
+              <p className="text-xs text-plum mt-1">
+                To confirm, please type your staff ID <strong className="text-foreground font-mono select-none">&quot;{targetMatch}&quot;</strong> in the box below:
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <input
+                type="text"
+                required
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                placeholder={targetMatch}
+                className="w-full px-4 py-2.5 bg-card-bg border border-border-beige rounded text-sm focus:outline-none focus:border-accent font-mono"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setIsResolveModalOpen(false);
+                  setConfirmInput("");
+                }}
+                className="px-4 py-2 border border-border-beige hover:bg-[#F5EFEB] text-plum text-xs font-semibold rounded cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResolve}
+                disabled={confirmInput !== targetMatch}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm & Resolve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

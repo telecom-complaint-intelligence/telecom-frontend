@@ -17,6 +17,7 @@ interface ComplaintDetail {
   category: string;
   customer_feedback: boolean | null;
   created_at: string;
+  resolved_by?: string | null;
   ai_analysis: {
     negativity_score: number;
     sentiment_score: number;
@@ -356,12 +357,12 @@ export default function ComplaintDetailsPage() {
                 <p className="text-xs text-plum">Telu Triage Center</p>
               </div>
             </div>
-            <div className="text-xs text-plum leading-relaxed bg-[#F5EFEB] p-3 rounded border border-border-beige">
+             <div className="text-xs text-plum leading-relaxed bg-[#F5EFEB] p-3 rounded border border-border-beige">
               <span className="font-semibold block text-foreground mb-1">Latest Update</span>
               {complaint.status === "ESCALATED" 
                 ? "Checking Anna Nagar outdoor terminals. ETA tomorrow 14:00." 
                 : complaint.status === "CLOSED" || complaint.status === "RESOLVED"
-                ? "Ticket resolved and marked closed."
+                ? `Ticket resolved and marked closed${complaint.resolved_by ? ` by ${complaint.resolved_by}` : ""}.`
                 : "Awaiting local line feedback."}
             </div>
           </div>

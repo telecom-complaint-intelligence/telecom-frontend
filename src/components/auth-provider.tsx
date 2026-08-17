@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface User {
   id?: string;
+  customer_id?: string;
   email: string;
   role: string; // "customer" | "client" | "client-operations" etc.
   department?: string;
@@ -120,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data = await response.json();
             const verifiedUser: User = {
               id: data.user.id,
+              customer_id: data.user.customer_id,
               email: data.user.email,
               role: data.user.role,
               department: data.user.department,
@@ -196,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const data = await response.json();
           const loggedInUser: User = {
             id: data.user.id,
+            customer_id: data.user.customer_id,
             email: data.user.email,
             role: data.user.role,
             department: data.user.department,
@@ -270,6 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await response.json();
         const loggedInUser: User = {
           id: data.user.id,
+          customer_id: data.user.customer_id,
           email: data.user.email,
           role: data.user.role,
           isProfileComplete: data.user.isProfileComplete,
@@ -467,6 +471,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await response.json();
         const updatedUser: User = {
           id: data.user.id,
+          customer_id: data.user.customer_id,
           email: data.user.email,
           role: data.user.role,
           isProfileComplete: data.user.isProfileComplete,
