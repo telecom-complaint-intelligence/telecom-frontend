@@ -30,6 +30,7 @@ interface ComplaintDetail {
   ai_analysis?: {
     negativity_score: number;
     sentiment_score: number;
+    confidence_score?: number | null;
     diagnosis: string | null;
     root_cause: string | null;
     risk_level: string | null;
@@ -335,7 +336,7 @@ export default function ClientComplaintIntelligencePage() {
               </div>
               <div className="p-5 space-y-1">
                 <span className="text-3xl font-serif font-bold text-green-600">
-                  {complaint.ai_analysis?.sentiment_score ? `${(complaint.ai_analysis.sentiment_score * 100).toFixed(0)}%` : "N/A"}
+                  {complaint.ai_analysis?.confidence_score ? `${(complaint.ai_analysis.confidence_score * 100).toFixed(0)}%` : "N/A"}
                 </span>
                 <span className="text-[10px] font-mono text-plum uppercase block">Confidence</span>
               </div>
