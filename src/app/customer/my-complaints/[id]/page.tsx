@@ -1,43 +1,217 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Clock, Activity, CheckCircle, Send, Paperclip, MessageSquare, AlertOctagon, User } from "lucide-react";
+import { ArrowLeft, Clock, Activity, CheckCircle, Send, Paperclip, AlertOctagon } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 
-interface Comment {
-  author: string;
-  role: "Customer" | "Operator" | "System";
-  message: string;
-  time: string;
+interface ComplaintDetail {
+  id: string;
+  ticket_number: string;
+  complaint1: string;
+  complaint2: string | null;
+  response: string | null;
+  status: string;
+  category: string;
+  customer_feedback: boolean | null;
+  created_at: string;
+  resolved_by?: string | null;
+  ai_analysis: {
+    negativity_score: number;
+    sentiment_score: number;
+    diagnosis: string | null;
+    root_cause: string | null;
+    risk_level: string | null;
+    policy_status: string | null;
+    final_decision: string | null;
+    critic_feedback: string | null;
+    solution_a: string | null;
+    solution_high: string | null;
+  } | null;
+  priority_scores: {
+    complexity: string;
+    total_complexity_score: number;
+  } | null;
 }
 
 export default function ComplaintDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { token, user } = useAuth();
   const id = params.id as string;
 
-  const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState<Comment[]>([
-    { author: "Arjun Raman", role: "Customer", message: "Raised this complaint with a speed test screenshot attached.", time: "11 AUG, 20:05" },
-    { author: "Uplink Triage", role: "System", message: "Sorted into Broadband performance, marked high priority, escalation risk 78%.", time: "11 AUG, 20:05" },
-    { author: "Vinoth K.", role: "Operator", message: "Ran a remote line test. Speeds measured at 11 Mbps against a 100 Mbps plan. Fault sits outside the premises.", time: "11 AUG, 21:30" },
-    { author: "Arjun Raman", role: "Customer", message: "Thanks. Any idea how long this will take? I have client calls all week.", time: "TODAY, 08:40" },
-    { author: "Vinoth K.", role: "Operator", message: "Network team is currently checking the local junction box. I expect to have a fix by tomorrow afternoon.", time: "TODAY, 09:12" },
-  ]);
+  const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handlePostComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
-    const newComment: Comment = {
-      author: "Arjun Raman",
-      role: "Customer",
-      message: commentText,
-      time: "Just now",
-    };
-    setComments([...comments, newComment]);
-    setCommentText("");
+  // Feedback states
+  const [lowFlowState, setLowFlowState] = useState<"recommendation" | "feedbackForm" | "solved">("recommendation");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Close Complaint States
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [confirmInput, setConfirmInput] = useState("");
+  const [closing, setClosing] = useState(false);
+
+  const fetchComplaintDetails = async () => {
+    if (!id || !token) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComplaint(data);
+      }
+    } catch (err) {
+      console.error("Error fetching complaint:", err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchComplaintDetails();
+  }, [id, token]);
+
+  const handleIssueSolved = async () => {
+    if (!id || !token) return;
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ customer_feedback: true })
+      });
+      if (response.ok) {
+        setLowFlowState("solved");
+        await fetchComplaintDetails();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSameProblem = () => {
+    if (complaint?.complaint1) {
+      setFeedbackText(`"${complaint.complaint1}" is still recurring and unresolved.`);
+    } else {
+      setFeedbackText("Internet issue is still recurring and unresolved.");
+    }
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !token || !feedbackText.trim()) return;
+
+    setSubmittingFeedback(true);
+    try {
+      // 1. Update the follow-up text
+      await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          complaint2: feedbackText,
+          status: "IN_PROGRESS"
+        })
+      });
+
+      // 2. Submit negative feedback to trigger escalation
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ customer_feedback: false })
+      });
+
+      if (response.ok) {
+        await fetchComplaintDetails();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
+  const handleCloseComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !user?.id) return;
+    if (confirmInput !== user.id) return;
+    setClosing(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: "CLOSED",
+          resolved_by: user.id,
+          complaint2: closeReason
+        })
+      });
+      if (response.ok) {
+        setIsCloseModalOpen(false);
+        setCloseReason("");
+        setConfirmInput("");
+        await fetchComplaintDetails();
+      }
+    } catch (err) {
+      console.error("Error closing complaint:", err);
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="p-6 md:p-12 text-center text-sm text-plum max-w-6xl w-full mx-auto font-sans">
+        Loading ticket detail...
+      </main>
+    );
+  }
+
+  if (!complaint) {
+    return (
+      <main className="p-6 md:p-12 text-center text-sm text-plum max-w-6xl w-full mx-auto font-sans">
+        Ticket not found.
+      </main>
+    );
+  }
+
+  const complexity = complaint.priority_scores?.complexity || "LOW";
+  const severity = complexity.toLowerCase();
+
+  // Timeline computation
+  const timeline = [
+    { label: "Submitted", time: complaint.created_at ? new Date(complaint.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "Recent", done: true },
+    { label: "Analysed", time: complaint.created_at ? new Date(complaint.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "Recent", done: true },
+    { 
+      label: "Assigned", 
+      time: complaint.status !== "OPEN" ? "Updated" : "Pending", 
+      done: complaint.status !== "OPEN" 
+    },
+    { 
+      label: complaint.status === "ESCALATED" ? "Escalated" : complaint.status === "CLOSED" || complaint.status === "RESOLVED" ? "Resolved" : "In Progress", 
+      time: "Live Status", 
+      active: complaint.status === "OPEN" || complaint.status === "IN_PROGRESS" || complaint.status === "ESCALATED",
+      done: complaint.status === "CLOSED" || complaint.status === "RESOLVED"
+    },
+  ];
 
   return (
     <main className="p-6 md:p-12 space-y-8 max-w-6xl w-full mx-auto font-sans">
@@ -47,18 +221,33 @@ export default function ComplaintDetailsPage() {
           <ArrowLeft size={12} /> My complaints
         </Link>
         <span>/</span>
-        <span className="text-foreground font-semibold">{id}</span>
+        <span className="text-foreground font-semibold">{complaint.ticket_number || id.substring(0, 8)}</span>
       </div>
 
       {/* Ticket Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-beige pb-6">
         <div className="space-y-1">
           <span className="text-xs font-mono text-plum uppercase block">COMPLAINT ID: {id}</span>
-          <h1 className="text-3xl font-serif font-normal">Slow internet connection</h1>
+          <h1 className="text-3xl font-serif font-normal capitalize">{complaint.complaint1}</h1>
         </div>
-        <span className="text-xs font-mono font-semibold px-3 py-1.5 rounded bg-amber-50 text-amber-800 border border-amber-200 uppercase self-start md:self-center">
-          IN PROGRESS
-        </span>
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
+          {complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+            <button
+              onClick={() => setIsCloseModalOpen(true)}
+              className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-semibold rounded cursor-pointer transition-colors"
+            >
+              Close Complaint
+            </button>
+          )}
+          <span className={`text-xs font-mono font-semibold px-3 py-1.5 rounded uppercase border ${
+            complaint.status === "OPEN" ? "bg-red-50 text-red-700 border-red-200" :
+            complaint.status === "IN_PROGRESS" ? "bg-amber-50 text-amber-700 border-amber-200" :
+            complaint.status === "ESCALATED" ? "bg-purple-50 text-purple-700 border-purple-200 animate-pulse" :
+            "bg-green-50 text-green-700 border-green-200"
+          }`}>
+            {complaint.status}
+          </span>
+        </div>
       </div>
 
       {/* Grid details */}
@@ -71,12 +260,7 @@ export default function ComplaintDetailsPage() {
             <h2 className="text-sm font-mono uppercase tracking-wider text-plum">Resolution timeline</h2>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative before:absolute before:left-3 md:before:left-6 before:top-4 before:right-6 before:h-0.5 before:bg-border-beige before:hidden md:before:block">
-              {[
-                { label: "Submitted", time: "11 AUG, 20:05", done: true },
-                { label: "Analysed", time: "11 AUG, 20:05", done: true },
-                { label: "Assigned", time: "11 AUG, 21:30", done: true },
-                { label: "In Progress", time: "TODAY, 09:12", active: true },
-              ].map((step, idx) => (
+              {timeline.map((step, idx) => (
                 <div key={idx} className="relative pl-6 md:pl-0 md:pt-6 space-y-1 text-xs">
                   <span
                     className={`absolute left-0 top-1 md:top-0 md:left-4 h-3 w-3 rounded-full border ring-4 ring-background ${
@@ -97,58 +281,110 @@ export default function ComplaintDetailsPage() {
           {/* Description */}
           <div className="bg-card-bg border border-border-beige p-6 rounded shadow-sm space-y-3">
             <h2 className="text-sm font-mono uppercase tracking-wider text-plum">Details Reported</h2>
-            <p className="text-sm text-plum font-serif leading-relaxed">
-              Speeds drop to almost nothing after 7pm every day for the past week. Fine in the mornings. Restarted the router twice, no change. Wired and wifi are both affected. I work from home in the evenings and video calls keep freezing.
+            <p className="text-sm text-plum font-serif leading-relaxed capitalize">
+              {complaint.complaint1}
             </p>
+            {complaint.complaint2 && (
+              <div className="mt-3 pt-3 border-t border-border-beige space-y-1">
+                <span className="text-[10px] font-mono text-plum uppercase block">Follow-up symptoms</span>
+                <p className="text-sm text-plum font-serif leading-relaxed capitalize">
+                  {complaint.complaint2}
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Activity feed */}
+          {/* Dynamic AI Resolution Panel */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-border-beige">
-              <h2 className="text-base font-serif font-semibold">Activity Log</h2>
+            <div className="p-5 border-b border-border-beige flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-accent animate-ping"></span>
+              <h2 className="text-base font-serif font-semibold">AI Console Recommendations</h2>
             </div>
 
-            <div className="p-6 space-y-6 relative before:absolute before:left-[27px] before:top-6 before:bottom-6 before:w-px before:bg-border-beige">
-              {comments.map((c, idx) => (
-                <div key={idx} className="relative pl-10 flex items-start gap-3 text-sm">
-                  <span className="absolute left-[3px] top-1.5 h-6 w-6 rounded-full bg-[#F5EFEB] border border-border-beige flex items-center justify-center text-[10px] font-serif font-bold text-accent">
-                    {c.author.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div className="space-y-1 w-full">
-                    <div className="flex justify-between items-baseline gap-4">
-                      <span className="font-semibold text-foreground">{c.author}</span>
-                      <span className="text-[10px] font-mono text-plum/70">{c.time}</span>
+            {/* Resolution Checker (For low/medium complexity, still open) */}
+            {complaint.status === "OPEN" && (severity === "low" || severity === "medium") ? (
+              <div className="p-6 space-y-6">
+                {lowFlowState === "recommendation" && (
+                  <div className="space-y-4">
+                    <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
+                      <span className="text-xs font-mono text-accent uppercase font-bold block">Recommended self-care steps</span>
+                      <p className="text-sm text-plum leading-relaxed white-space-pre-line">
+                        {complaint.response || "No immediate action proposed. Support operations team has been notified."}
+                      </p>
                     </div>
-                    <p className="text-plum leading-relaxed text-xs">{c.message}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
 
-            {/* Comment Composer */}
-            <form onSubmit={handlePostComment} className="p-4 bg-[#F5EFEB] border-t border-border-beige space-y-3">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Reply to support or add updates..."
-                rows={3}
-                className="w-full p-3 bg-card-bg border border-border-beige rounded text-xs focus:outline-none focus:border-accent resize-none"
-              />
-              <div className="flex justify-between items-center">
-                <button
-                  type="button"
-                  className="text-xs text-plum hover:text-foreground flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Paperclip size={12} /> Attach files
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Send size={12} /> Post Comment
-                </button>
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleIssueSolved}
+                        className="px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-colors cursor-pointer"
+                      >
+                        ✓ Issue Solved
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLowFlowState("feedbackForm")}
+                        className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 text-xs font-semibold rounded hover:bg-red-100 transition-colors cursor-pointer"
+                      >
+                        ✗ Still Facing Issue
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {lowFlowState === "solved" && (
+                  <div className="p-5 bg-green-50 border border-green-200 text-green-800 rounded text-sm font-medium">
+                    ✓ Great! Glad to hear the issue was resolved. Your ticket has been closed.
+                  </div>
+                )}
+
+                {lowFlowState === "feedbackForm" && (
+                  <form onSubmit={handleFeedbackSubmit} className="space-y-4 animate-fade-in">
+                    <div className="space-y-2">
+                      <label className="text-xs font-mono text-plum uppercase block" htmlFor="recheckDesc">
+                        Describe what didn&apos;t work (triggers AI escalation):
+                      </label>
+                      <textarea
+                        id="recheckDesc"
+                        required
+                        value={feedbackText}
+                        onChange={(e) => setFeedbackText(e.target.value)}
+                        placeholder="Detail the remaining symptoms..."
+                        rows={3}
+                        className="w-full p-3 bg-background border border-border-beige rounded text-xs focus:outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="submit"
+                        disabled={submittingFeedback}
+                        className="px-4 py-2 bg-[#1E0A2D] text-white text-xs font-semibold rounded hover:opacity-90 transition-opacity cursor-pointer"
+                      >
+                        {submittingFeedback ? "Submitting..." : "Submit Issue Details"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSameProblem}
+                        className="px-4 py-2 bg-purple-50 text-accent border border-purple-200 text-xs font-semibold rounded hover:bg-purple-100 transition-colors cursor-pointer"
+                      >
+                        Same Problem
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
-            </form>
+            ) : (
+              /* Display resolution outputs for high complexity or already resolved tickets */
+              <div className="p-6 space-y-6">
+                <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
+                  <span className="text-xs font-mono text-accent uppercase font-bold block">Assigned resolution</span>
+                  <p className="text-sm text-plum leading-relaxed white-space-pre-line">
+                    {complaint.response || "A technician dispatch is scheduled to restore your services."}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -164,13 +400,17 @@ export default function ComplaintDetailsPage() {
                 VK
               </div>
               <div>
-                <p className="text-sm font-semibold">Vinoth K.</p>
-                <p className="text-xs text-plum">Madurai Operations Support</p>
+                <p className="text-sm font-semibold">Operations Support</p>
+                <p className="text-xs text-plum">Telu Triage Center</p>
               </div>
             </div>
-            <div className="text-xs text-plum leading-relaxed bg-[#F5EFEB] p-3 rounded border border-border-beige">
+             <div className="text-xs text-plum leading-relaxed bg-[#F5EFEB] p-3 rounded border border-border-beige">
               <span className="font-semibold block text-foreground mb-1">Latest Update</span>
-              Checking Anna Nagar outdoor terminals. ETA tomorrow 14:00.
+              {complaint.status === "ESCALATED" 
+                ? "Checking Anna Nagar outdoor terminals. ETA tomorrow 14:00." 
+                : complaint.status === "CLOSED" || complaint.status === "RESOLVED"
+                ? `Ticket resolved and marked closed${complaint.resolved_by ? ` by ${complaint.resolved_by}` : ""}.`
+                : "Awaiting local line feedback."}
             </div>
           </div>
 
@@ -181,22 +421,81 @@ export default function ComplaintDetailsPage() {
             </h3>
             <div className="divide-y divide-border-beige">
               <div className="py-2 flex justify-between">
-                <span className="font-mono text-plum uppercase">Sentiment</span>
-                <span className="font-semibold text-red-600">Highly Negative</span>
-              </div>
-              <div className="py-2 flex justify-between">
-                <span className="font-mono text-plum uppercase">Escalation Risk</span>
-                <span className="font-semibold text-red-600">78%</span>
-              </div>
-              <div className="py-2 flex justify-between">
                 <span className="font-mono text-plum uppercase">Priority</span>
-                <span className="font-semibold text-accent font-mono">HIGH</span>
+                <span className="font-semibold text-accent font-mono">{complexity}</span>
               </div>
             </div>
           </div>
 
         </div>
       </div>
+
+      {/* Customer Close Confirmation Modal */}
+      {isCloseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <form onSubmit={handleCloseComplaint} className="w-full max-w-md bg-background border border-border-beige p-6 rounded shadow-2xl space-y-4 text-left">
+            <div className="border-b border-border-beige pb-3">
+              <h2 className="text-lg font-serif font-semibold text-foreground">Close Complaint Ticket</h2>
+              <p className="text-xs text-plum mt-1">
+                Please provide a brief reason for closing this ticket, and enter your customer ID to confirm.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-mono text-plum uppercase block" htmlFor="closeReasonInput">
+                  Reason for Closing:
+                </label>
+                <textarea
+                  id="closeReasonInput"
+                  required
+                  rows={3}
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  placeholder="Service restored / Resolved by self / No longer required..."
+                  className="w-full px-4 py-2 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm text-foreground"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-mono text-plum uppercase block" htmlFor="customerIdConfirm">
+                  Type your Customer ID <strong className="text-foreground font-mono select-none">&quot;{user?.id}&quot;</strong> to confirm:
+                </label>
+                <input
+                  id="customerIdConfirm"
+                  type="text"
+                  required
+                  value={confirmInput}
+                  onChange={(e) => setConfirmInput(e.target.value)}
+                  placeholder={user?.id || ""}
+                  className="w-full px-4 py-2 bg-card-bg border border-border-beige rounded focus:outline-none focus:border-accent text-sm font-mono text-foreground"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCloseModalOpen(false);
+                  setCloseReason("");
+                  setConfirmInput("");
+                }}
+                className="px-4 py-2 border border-border-beige hover:bg-[#F5EFEB] text-plum text-xs font-semibold rounded cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={confirmInput !== user?.id || closing}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {closing ? "Closing..." : "Confirm & Close"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }
