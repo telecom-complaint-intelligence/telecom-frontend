@@ -7,34 +7,51 @@ import { useAuth } from "@/components/auth-provider";
 
 interface RaisedComplaint {
   id: string;
+  ticket_number: string;
+  complaint1: string;
   category: string;
-  severity: string;
-  title: string;
-  description: string;
   status: string;
-  createdAt: string;
+  created_at: string;
+  priority_scores?: {
+    complexity: string;
+  } | null;
 }
 
 export default function CustomerDashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [complaints, setComplaints] = useState<RaisedComplaint[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("telu_raised_complaints");
-    if (stored) {
-      setTimeout(() => setComplaints(JSON.parse(stored)), 0);
-    }
-  }, []);
+    if (!token) return;
+
+    fetch("http://localhost:8000/api/v1/complaints/me", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to load complaints");
+        return res.json();
+      })
+      .then(data => {
+        setComplaints(data);
+      })
+      .catch(err => {
+        console.error("Error loading dashboard complaints:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [token]);
 
   // Compute status metrics dynamically
-  const openCount = complaints.filter(c => c.status === "OPEN").length;
-  const pendingCount = complaints.filter(c => c.status === "PENDING").length;
-  const resolvedCount = complaints.filter(c => c.status === "RESOLVED").length;
+  const openCount = complaints.filter(c => c.status === "OPEN" || c.status === "IN_PROGRESS" || c.status === "ESCALATED").length;
+  const closedCount = complaints.filter(c => c.status === "CLOSED" || c.status === "RESOLVED").length;
   const totalCount = complaints.length;
 
   const openPct = totalCount > 0 ? (openCount / totalCount) * 100 : 0;
-  const pendingPct = totalCount > 0 ? (pendingCount / totalCount) * 100 : 0;
-  const resolvedPct = totalCount > 0 ? (resolvedCount / totalCount) * 100 : 0;
+  const closedPct = totalCount > 0 ? (closedCount / totalCount) * 100 : 0;
 
   const recentComplaints = complaints.slice(-3).reverse();
 
@@ -73,9 +90,8 @@ export default function CustomerDashboard() {
           <div className="w-full h-2.5 rounded bg-border-beige flex overflow-hidden">
             {totalCount > 0 ? (
               <>
-                <div className="h-full bg-red-500 transition-all" style={{ width: `${openPct}%` }} title={`${openCount} Open`}></div>
-                <div className="h-full bg-amber-500 transition-all" style={{ width: `${pendingPct}%` }} title={`${pendingCount} Pending`}></div>
-                <div className="h-full bg-accent transition-all" style={{ width: `${resolvedPct}%` }} title={`${resolvedCount} Resolved`}></div>
+                <div className="h-full bg-red-500 transition-all" style={{ width: `${openPct}%` }} title={`${openCount} Active`}></div>
+                <div className="h-full bg-accent transition-all" style={{ width: `${closedPct}%` }} title={`${closedCount} Resolved`}></div>
               </>
             ) : (
               <div className="h-full w-full bg-border-beige"></div>
@@ -83,13 +99,10 @@ export default function CustomerDashboard() {
           </div>
           <div className="flex items-center gap-6 text-xs font-mono">
             <span className="flex items-center gap-1.5 text-red-600 font-semibold">
-              <Activity size={12} className="text-red-500" /> {openCount} OPEN
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-700 font-semibold">
-              <Clock size={12} className="text-amber-500" /> {pendingCount} PENDING
+              <Activity size={12} className="text-red-500" /> {openCount} ACTIVE
             </span>
             <span className="flex items-center gap-1.5 text-accent font-semibold">
-              <CheckCircle size={12} className="text-accent" /> {resolvedCount} RESOLVED
+              <CheckCircle size={12} className="text-accent" /> {closedCount} RESOLVED / CLOSED
             </span>
           </div>
         </div>
@@ -110,34 +123,49 @@ export default function CustomerDashboard() {
         </div>
 
         <div className="divide-y divide-border-beige">
-          {recentComplaints.length > 0 ? (
-            recentComplaints.map(complaint => (
-              <Link 
-                key={complaint.id} 
-                href={`/customer/my-complaints/${complaint.id}`} 
-                className="block p-6 flex items-start justify-between gap-4 hover:bg-background/40 transition-colors"
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs font-mono text-plum">{complaint.id}</span>
-                    <span className="text-xs font-mono font-medium text-accent">{complaint.category.toUpperCase()}</span>
-                    <span className="text-xs font-mono text-plum flex items-center gap-1">
-                      <Clock size={12} className="text-amber-500" /> {complaint.severity.toUpperCase()} &middot; RAISED {complaint.createdAt}
-                    </span>
+          {loading ? (
+            <div className="p-12 text-center text-plum text-xs">
+              Loading recent complaints...
+            </div>
+          ) : recentComplaints.length > 0 ? (
+            recentComplaints.map(complaint => {
+              const complexity = complaint.priority_scores?.complexity || "LOW";
+              const dateStr = complaint.created_at 
+                ? new Date(complaint.created_at).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                  })
+                : "Recent";
+
+              return (
+                <Link 
+                  key={complaint.id} 
+                  href={`/customer/my-complaints/${complaint.id}`} 
+                  className="block p-6 flex items-start justify-between gap-4 hover:bg-background/40 transition-colors"
+                >
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-xs font-mono text-plum">{complaint.ticket_number || complaint.id.substring(0, 8)}</span>
+                      <span className="text-xs font-mono font-medium text-accent uppercase">{complaint.category || "General"}</span>
+                      <span className="text-xs font-mono text-plum flex items-center gap-1">
+                        <Clock size={12} className="text-amber-500 mr-1" /> {complexity.toUpperCase()} &middot; {dateStr}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-serif font-medium capitalize">{complaint.complaint1}</h3>
                   </div>
-                  <h3 className="text-base font-serif font-medium">{complaint.title}</h3>
-                </div>
-                <span className={`text-xs font-mono font-medium px-3 py-1 rounded border ${
-                  complaint.status === "OPEN" 
-                    ? "bg-red-50 text-red-700 border-red-200" 
-                    : complaint.status === "PENDING"
-                    ? "bg-amber-50 text-amber-700 border-amber-200"
-                    : "bg-purple-50 text-accent border-purple-200"
-                }`}>
-                  {complaint.status}
-                </span>
-              </Link>
-            ))
+                  <span className={`text-xs font-mono font-medium px-3 py-1 rounded border ${
+                    complaint.status === "OPEN" 
+                      ? "bg-red-50 text-red-700 border-red-200" 
+                      : complaint.status === "IN_PROGRESS"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-green-50 text-green-700 border-green-200"
+                  }`}>
+                    {complaint.status}
+                  </span>
+                </Link>
+              );
+            })
           ) : (
             <div className="p-12 text-center text-plum font-serif italic text-sm">
               No complaints raised yet.
