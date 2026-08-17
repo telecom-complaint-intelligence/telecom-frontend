@@ -145,9 +145,10 @@ export default function HighRiskPage() {
             tickets.map(t => {
               const riskPct = Math.round(t.negativity_score * 100);
               return (
-                <div
+                <Link
                   key={t.id}
-                  className="p-6 bg-card-bg border border-border-beige rounded flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:border-plum transition-all"
+                  href={`/client/complaints/${t.id}`}
+                  className="p-6 bg-card-bg border border-border-beige rounded flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:border-plum transition-all block cursor-pointer text-current hover:no-underline"
                 >
                   <div className="flex items-center gap-6">
                     <div className="text-center shrink-0">
@@ -172,14 +173,13 @@ export default function HighRiskPage() {
 
                   <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 border-border-beige pt-3 lg:pt-0">
                     <span className="text-xs font-mono text-plum font-bold">{t.status}</span>
-                    <Link
-                      href={`/client/complaints/${t.id}`}
+                    <span
                       className="px-3.5 py-1.5 bg-[#1E0A2D] text-white text-xs font-medium rounded hover:bg-[#2F1442] transition-colors cursor-pointer"
                     >
                       Take Action
-                    </Link>
+                    </span>
                   </div>
-                </div>
+                </Link>
               );
             })
           ) : (

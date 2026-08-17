@@ -13,13 +13,14 @@ interface Complaint {
   category: string;
   status: string;
   created_at: string;
+  resolved_by?: string | null;
   priority_scores?: {
     complexity: string;
   } | null;
 }
 
 export default function ClientComplaintsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -31,6 +32,10 @@ export default function ClientComplaintsPage() {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  // Resolution Modal States (GitHub style confirmation)
+  const [activeResolveTicket, setActiveResolveTicket] = useState<{ id: string; ticket_number: string } | null>(null);
+  const [confirmInput, setConfirmInput] = useState("");
 
   const fetchTicketsList = React.useCallback(() => {
     if (!token) return;
@@ -70,22 +75,35 @@ export default function ClientComplaintsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const updateStatus = async (id: string, nextStatus: "IN_PROGRESS" | "RESOLVED") => {
+  const updateStatus = async (id: string, nextStatus: "IN_PROGRESS" | "RESOLVED", resolvedBy?: string) => {
     if (!token) return;
     try {
+      const payload: { status: string; resolved_by?: string } = { status: nextStatus };
+      if (resolvedBy) {
+        payload.resolved_by = resolvedBy;
+      }
       const response = await fetch(`http://localhost:8000/api/v1/complaints/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ status: nextStatus })
+        body: JSON.stringify(payload)
       });
       if (response.ok) {
         fetchTicketsList();
       }
     } catch (err) {
       console.error("Error updating status:", err);
+    }
+  };
+
+  const handleConfirmResolve = async () => {
+    const targetMatch = user?.id || "OPS-ADMIN";
+    if (confirmInput !== targetMatch) return;
+    if (activeResolveTicket) {
+      await updateStatus(activeResolveTicket.id, "RESOLVED", targetMatch);
+      setActiveResolveTicket(null);
     }
   };
 
@@ -325,17 +343,24 @@ export default function ClientComplaintsPage() {
 
                 <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-border-beige pt-3 md:pt-0">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-medium ${
-                        c.status === "RESOLVED" || c.status === "CLOSED"
-                          ? "bg-green-50 text-green-700 border border-green-200"
-                          : c.status === "IN_PROGRESS"
-                          ? "bg-amber-50 text-amber-700 border border-amber-200"
-                          : "bg-purple-100 text-accent"
-                      }`}
-                    >
-                      {c.status.toUpperCase()}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-medium ${
+                          c.status === "RESOLVED" || c.status === "CLOSED"
+                            ? "bg-green-50 text-green-700 border border-green-200"
+                            : c.status === "IN_PROGRESS"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-purple-100 text-accent"
+                        }`}
+                      >
+                        {c.status.toUpperCase()}
+                      </span>
+                      {c.resolved_by && (
+                        <span className="text-[10px] font-mono text-plum/80 uppercase">
+                          Resolved by: <span className="font-semibold text-accent">{c.resolved_by}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {c.status !== "RESOLVED" && c.status !== "CLOSED" && (
@@ -349,7 +374,10 @@ export default function ClientComplaintsPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => updateStatus(c.id, "RESOLVED")}
+                        onClick={() => {
+                          setActiveResolveTicket({ id: c.id, ticket_number: c.ticket_number || c.id });
+                          setConfirmInput("");
+                        }}
                         className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors flex items-center gap-1 cursor-pointer"
                       >
                         <Check size={12} />
@@ -368,6 +396,47 @@ export default function ClientComplaintsPage() {
           </div>
         )}
       </div>
+
+      {/* Resolution Modal (GitHub-style delete prompt) */}
+      {activeResolveTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-background border border-border-beige p-6 rounded shadow-2xl space-y-4">
+            <div className="border-b border-border-beige pb-3">
+              <h2 className="text-lg font-serif font-semibold text-foreground">Confirm Complaint Resolution</h2>
+              <p className="text-xs text-plum mt-1">
+                To confirm, please type your staff ID <strong className="text-foreground font-mono select-none">&quot;{user?.id || "OPS-ADMIN"}&quot;</strong> in the box below:
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <input
+                type="text"
+                required
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                placeholder={user?.id || "OPS-ADMIN"}
+                className="w-full px-4 py-2.5 bg-card-bg border border-border-beige rounded text-sm focus:outline-none focus:border-accent font-mono"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setActiveResolveTicket(null)}
+                className="px-4 py-2 border border-border-beige hover:bg-[#F5EFEB] text-plum text-xs font-semibold rounded cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResolve}
+                disabled={confirmInput !== (user?.id || "OPS-ADMIN")}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm & Resolve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
