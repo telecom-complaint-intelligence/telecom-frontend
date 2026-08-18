@@ -210,52 +210,6 @@ export default function ClientComplaintIntelligencePage() {
           <span className="text-xs font-mono text-plum uppercase block">CMP ID: {id}</span>
           <h1 className="text-2xl font-serif font-bold capitalize">{complaint.complaint1}</h1>
         </div>
-        
-        <div className="flex flex-wrap gap-3">
-          {complaint.status === "OPEN" && (
-            <button
-              onClick={() => updateStatus("IN_PROGRESS")}
-              className="px-4 py-2 border border-border-beige hover:bg-card-bg text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer"
-            >
-              Process Ticket
-            </button>
-          )}
-          {complaint.status === "IN_PROGRESS" && (
-            <button
-              onClick={() => updateStatus("OPEN")}
-              className="px-4 py-2 border border-border-beige hover:bg-card-bg text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer text-plum"
-            >
-              Revert to Open
-            </button>
-          )}
-          {complaint.status !== "ESCALATED" && complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
-            <button
-              onClick={() => updateStatus("ESCALATED")}
-              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer"
-            >
-              <ShieldAlert size={12} /> Escalate
-            </button>
-          )}
-          {complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
-            <button
-              onClick={() => {
-                setIsResolveModalOpen(true);
-                setConfirmInput("");
-              }}
-              className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
-            >
-              <CheckCircle size={12} /> Resolve complaint
-            </button>
-          )}
-          {complaint.status !== "CLOSED" && (
-            <button
-              onClick={() => updateStatus("CLOSED", targetMatch)}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-650 text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
-            >
-              Close Ticket
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Detailed Triage Grid */}
@@ -330,6 +284,8 @@ export default function ClientComplaintIntelligencePage() {
               )}
             </div>
           )}
+
+
 
           {/* Dynamic Event Triage Feed */}
           <div className="bg-card-bg border border-border-beige rounded shadow-sm overflow-hidden">
@@ -417,29 +373,57 @@ export default function ClientComplaintIntelligencePage() {
             </dl>
           </div>
 
-          {/* AI diagnosis & root cause */}
-          <div className="bg-[#1E0A2D] text-white border border-[#2F1442] rounded shadow-sm p-6 space-y-4">
-            <div className="flex items-center gap-2 text-accent">
-              <span className="h-2 w-2 rounded-full bg-accent animate-ping"></span>
-              <span className="text-[10px] font-mono uppercase tracking-wider">Triage Diagnosis</span>
+          {/* Action console workflow controls */}
+          <div className="bg-card-bg border border-border-beige p-6 rounded shadow-sm space-y-4">
+            <h2 className="text-sm font-mono uppercase tracking-wider text-plum">Actions</h2>
+            <div className="flex flex-col gap-2.5">
+              {complaint.status === "OPEN" && (
+                <button
+                  onClick={() => updateStatus("IN_PROGRESS")}
+                  className="w-full px-4 py-2.5 border border-border-beige hover:bg-card-bg text-xs font-semibold rounded flex items-center justify-center gap-1.5 cursor-pointer text-foreground"
+                >
+                  Process Ticket
+                </button>
+              )}
+              {complaint.status === "IN_PROGRESS" && (
+                <button
+                  onClick={() => updateStatus("OPEN")}
+                  className="w-full px-4 py-2.5 border border-border-beige hover:bg-card-bg text-xs font-semibold rounded flex items-center justify-center gap-1.5 cursor-pointer text-plum"
+                >
+                  Revert to Open
+                </button>
+              )}
+              {complaint.status !== "ESCALATED" && complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+                <button
+                  onClick={() => updateStatus("ESCALATED")}
+                  className="w-full px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldAlert size={12} /> Escalate
+                </button>
+              )}
+              {complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
+                <button
+                  onClick={() => {
+                    setIsResolveModalOpen(true);
+                    setConfirmInput("");
+                  }}
+                  className="w-full px-4 py-2.5 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <CheckCircle size={12} /> Resolve complaint
+                </button>
+              )}
+              {complaint.status !== "CLOSED" && (
+                <button
+                  onClick={() => updateStatus("CLOSED", targetMatch)}
+                  className="w-full px-4 py-2.5 bg-gray-500 hover:bg-gray-650 text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  Close Ticket
+                </button>
+              )}
             </div>
-            {complaint.ai_analysis?.diagnosis ? (
-              <div className="space-y-3">
-                <p className="text-xs text-[#C4D4DC] leading-relaxed font-serif">
-                  <b>Diagnosis:</b> {complaint.ai_analysis.diagnosis}
-                </p>
-                {complaint.ai_analysis.root_cause && (
-                  <p className="text-xs text-[#C4D4DC] leading-relaxed border-t border-[#2F1442] pt-2 font-serif">
-                    <b>Root Cause:</b> {complaint.ai_analysis.root_cause}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-[#C4D4DC] leading-relaxed">
-                Triage Diagnosis data is not available. Please verify connection to the AI service.
-              </p>
-            )}
           </div>
+
+          {/* AI diagnosis & root cause was removed from sidebar */}
 
         </div>
       </div>
