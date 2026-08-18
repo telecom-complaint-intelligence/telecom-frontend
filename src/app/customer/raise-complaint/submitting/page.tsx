@@ -33,7 +33,7 @@ function SubmittingComplaintContent() {
   const [complaintData, setComplaintData] = useState<ComplaintDetail | null>(null);
 
   // Flow control states
-  const [severity, setSeverity] = useState<"low" | "medium" | "high" | "critical">("low");
+  const [severity, setSeverity] = useState<"low" | "medium" | "high" | "critical" | "other">("low");
   const [isFinalSuccess, setIsFinalSuccess] = useState(false);
   
   // Low severity follow-up states
@@ -57,8 +57,8 @@ function SubmittingComplaintContent() {
       .then(data => {
         setComplaintData(data);
         const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
-        if (["low", "medium", "high", "critical"].includes(comp)) {
-          setSeverity(comp as "low" | "medium" | "high" | "critical");
+        if (["low", "medium", "high", "critical", "other"].includes(comp)) {
+          setSeverity(comp as "low" | "medium" | "high" | "critical" | "other");
         } else {
           setSeverity("low");
         }
@@ -105,8 +105,8 @@ function SubmittingComplaintContent() {
         const data = await res.json();
         setComplaintData(data);
         const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
-        if (["low", "medium", "high", "critical"].includes(comp)) {
-          setSeverity(comp as "low" | "medium" | "high" | "critical");
+        if (["low", "medium", "high", "critical", "other"].includes(comp)) {
+          setSeverity(comp as "low" | "medium" | "high" | "critical" | "other");
         } else {
           setSeverity("low");
         }
@@ -310,7 +310,7 @@ function SubmittingComplaintContent() {
             </div>
 
             {/* Content view based on Severity */}
-            {(severity === "low" || severity === "medium") && complaintData?.status !== "ESCALATED" ? (
+            {severity === "low" && complaintData?.status !== "ESCALATED" ? (
               // Low Severity Flow with Recommendations
               <div className="p-6 space-y-6">
                 {lowFlowState === "recommendation" && (
@@ -388,8 +388,8 @@ function SubmittingComplaintContent() {
               <div className="p-6 space-y-6">
                 <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
                   <span className="text-xs font-mono text-accent uppercase font-bold block">Assigned resolution</span>
-                  <p className="text-sm text-plum leading-relaxed white-space-pre-line">
-                    {complaintData?.response || "A technician dispatch is scheduled to restore your services."}
+                  <p className="text-sm text-plum leading-relaxed">
+                    Complaint has been raised and the support team is on the way.
                   </p>
                 </div>
               </div>
