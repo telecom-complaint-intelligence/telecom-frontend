@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.next/
+
+# Development & local config
+.env.local
+.env.development
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Dev tooling
+.eslintrc*
+eslint.config*
+tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+*.log
+
+# Docs
+*.md
+docs/
