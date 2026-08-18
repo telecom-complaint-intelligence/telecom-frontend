@@ -302,7 +302,7 @@ export default function ComplaintDetailsPage() {
             </div>
 
             {/* Resolution Checker (For low/medium complexity, still open) */}
-            {complaint.status === "OPEN" && (severity === "low" || severity === "medium") ? (
+            {complaint.status === "OPEN" && severity === "low" ? (
               <div className="p-6 space-y-6">
                 {lowFlowState === "recommendation" && (
                   <div className="space-y-4">
@@ -380,7 +380,9 @@ export default function ComplaintDetailsPage() {
                 <div className="bg-purple-50 p-5 rounded border border-purple-200 space-y-3">
                   <span className="text-xs font-mono text-accent uppercase font-bold block">Assigned resolution</span>
                   <p className="text-sm text-plum leading-relaxed white-space-pre-line">
-                    {complaint.response || "A technician dispatch is scheduled to restore your services."}
+                    {complaint.status === "CLOSED" || complaint.status === "RESOLVED"
+                      ? (complaint.response || "Ticket resolved.")
+                      : "Complaint has been raised and the support team is on the way."}
                   </p>
                 </div>
               </div>
