@@ -78,7 +78,7 @@ export default function ClientComplaintIntelligencePage() {
     fetchComplaintDetails();
   }, [id, token]);
 
-  const updateStatus = async (nextStatus: "IN_PROGRESS" | "ESCALATED" | "RESOLVED", resolvedBy?: string) => {
+  const updateStatus = async (nextStatus: "OPEN" | "IN_PROGRESS" | "ESCALATED" | "RESOLVED" | "CLOSED", resolvedBy?: string) => {
     if (!token) return;
     try {
       const payload: { status: string; resolved_by?: string } = { status: nextStatus };
@@ -102,7 +102,11 @@ export default function ClientComplaintIntelligencePage() {
   };
 
   const handleConfirmResolve = async () => {
-    const targetMatch = user?.id || "OPS-ADMIN";
+    const targetMatch = user?.id
+      ? user.id.startsWith("CUST-")
+        ? user.id.replace("CUST-", "OPS-")
+        : user.id
+      : "OPS-ADMIN";
     if (confirmInput !== targetMatch) return;
     await updateStatus("RESOLVED", targetMatch);
     setIsResolveModalOpen(false);
@@ -216,6 +220,14 @@ export default function ClientComplaintIntelligencePage() {
               Process Ticket
             </button>
           )}
+          {complaint.status === "IN_PROGRESS" && (
+            <button
+              onClick={() => updateStatus("OPEN")}
+              className="px-4 py-2 border border-border-beige hover:bg-card-bg text-xs font-medium rounded flex items-center gap-1.5 cursor-pointer text-plum"
+            >
+              Revert to Open
+            </button>
+          )}
           {complaint.status !== "ESCALATED" && complaint.status !== "RESOLVED" && complaint.status !== "CLOSED" && (
             <button
               onClick={() => updateStatus("ESCALATED")}
@@ -233,6 +245,14 @@ export default function ClientComplaintIntelligencePage() {
               className="px-4 py-2 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
             >
               <CheckCircle size={12} /> Resolve complaint
+            </button>
+          )}
+          {complaint.status !== "CLOSED" && (
+            <button
+              onClick={() => updateStatus("CLOSED", targetMatch)}
+              className="px-4 py-2 bg-gray-500 hover:bg-gray-650 text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer"
+            >
+              Close Ticket
             </button>
           )}
         </div>

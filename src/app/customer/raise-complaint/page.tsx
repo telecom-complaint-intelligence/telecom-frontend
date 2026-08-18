@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Send, ArrowLeft, Info, HelpCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import LoadingState from "@/components/loading-state";
 
 export default function RaiseComplaintPage() {
   const router = useRouter();
@@ -245,15 +246,16 @@ export default function RaiseComplaintPage() {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-sm font-medium rounded transition-colors flex items-center gap-2 cursor-pointer"
+              className="px-6 py-3 bg-[#1E0A2D] hover:bg-[#2F1442] text-white text-sm font-medium rounded transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={14} />
-              {loading ? "Submitting..." : "Submit complaint"}
+              Submit complaint
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={() => router.push("/customer/dashboard")}
-              className="px-6 py-3 border border-border-beige hover:bg-background/40 text-sm text-plum rounded flex items-center gap-2 transition-all cursor-pointer"
+              className="px-6 py-3 border border-border-beige hover:bg-background/40 text-sm text-plum rounded flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowLeft size={14} />
               Cancel
@@ -284,6 +286,27 @@ export default function RaiseComplaintPage() {
           </div>
         </div>
       </form>
+
+      {/* Glassmorphic Overlay Triage Modal */}
+      {loading && (
+        <div className="fixed inset-0 bg-[#FAF6F0]/80 backdrop-blur-md z-50 flex items-center justify-center animate-fade-in">
+          <div className="bg-white border border-border-beige p-8 rounded-lg shadow-overlay max-w-sm w-full mx-4 space-y-4 animate-scale-up">
+            <div className="flex items-center gap-2 text-accent">
+              <span className="h-2 w-2 rounded-full bg-accent animate-ping"></span>
+              <span className="text-[10px] font-mono tracking-wider uppercase">Triage Uplink</span>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-serif font-normal text-foreground">Submitting Complaint</h3>
+              <p className="text-xs text-plum leading-relaxed">
+                Establishing database connection and starting multi-agent classification workflows...
+              </p>
+            </div>
+            <div className="pt-2 border-t border-border-beige">
+              <LoadingState label="Triage Routing" variant="Drive" />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
