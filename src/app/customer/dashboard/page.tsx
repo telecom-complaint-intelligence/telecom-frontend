@@ -53,7 +53,7 @@ export default function CustomerDashboard() {
   const openPct = totalCount > 0 ? (openCount / totalCount) * 100 : 0;
   const closedPct = totalCount > 0 ? (closedCount / totalCount) * 100 : 0;
 
-  const recentComplaints = complaints.slice(-3).reverse();
+  const recentComplaints = complaints.slice(0, 3);
 
   return (
     <main className="p-6 md:p-12 space-y-8 max-w-5xl w-full mx-auto">
