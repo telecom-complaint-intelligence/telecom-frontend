@@ -33,7 +33,7 @@ function SubmittingComplaintContent() {
   const [complaintData, setComplaintData] = useState<ComplaintDetail | null>(null);
 
   // Flow control states
-  const [severity, setSeverity] = useState<"low" | "high" | "critical">("low");
+  const [severity, setSeverity] = useState<"low" | "medium" | "high" | "critical">("low");
   const [isFinalSuccess, setIsFinalSuccess] = useState(false);
   
   // Low severity follow-up states
@@ -57,8 +57,8 @@ function SubmittingComplaintContent() {
       .then(data => {
         setComplaintData(data);
         const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
-        if (comp === "critical" || comp === "high") {
-          setSeverity(comp as "low" | "high" | "critical");
+        if (["low", "medium", "high", "critical"].includes(comp)) {
+          setSeverity(comp as "low" | "medium" | "high" | "critical");
         } else {
           setSeverity("low");
         }
@@ -73,7 +73,7 @@ function SubmittingComplaintContent() {
     { label: "Detecting issue category", detail: complaintData?.category || "Triage pending" },
     { label: "Analysing customer sentiment", detail: complaintData?.ai_analysis ? `Negativity: ${(complaintData.ai_analysis.negativity_score * 100).toFixed(0)}%` : "Calculating..." },
     { label: "Calculating console priority", detail: complaintData?.priority_scores?.complexity || "Triage pending" },
-    { label: "Predicting escalation risk", detail: severity === "critical" ? "91% probability" : severity === "high" ? "78% probability" : "12% probability" },
+    { label: "Predicting escalation risk", detail: severity === "critical" ? "91% probability" : severity === "high" ? "78% probability" : severity === "medium" ? "38% probability" : "12% probability" },
     { label: "Generating recommended actions", detail: "Ready" },
   ];
 
@@ -105,8 +105,8 @@ function SubmittingComplaintContent() {
         const data = await res.json();
         setComplaintData(data);
         const comp = data.priority_scores?.complexity?.toLowerCase() || "low";
-        if (comp === "critical" || comp === "high") {
-          setSeverity(comp as "low" | "high" | "critical");
+        if (["low", "medium", "high", "critical"].includes(comp)) {
+          setSeverity(comp as "low" | "medium" | "high" | "critical");
         } else {
           setSeverity("low");
         }
@@ -304,13 +304,13 @@ function SubmittingComplaintContent() {
               <div className="p-5 space-y-1">
                 <span className="text-[10px] font-mono text-plum uppercase block">Response Due</span>
                 <p className="font-medium text-sm">
-                  {severity === "critical" ? "Immediate Triage" : severity === "high" ? "Within 4 hours" : "Within 24 hours"}
+                  {severity === "critical" ? "Immediate Triage" : severity === "high" ? "Within 4 hours" : severity === "medium" ? "Within 8 hours" : "Within 24 hours"}
                 </p>
               </div>
             </div>
 
             {/* Content view based on Severity */}
-            {severity === "low" && complaintData?.status !== "ESCALATED" ? (
+            {(severity === "low" || severity === "medium") && complaintData?.status !== "ESCALATED" ? (
               // Low Severity Flow with Recommendations
               <div className="p-6 space-y-6">
                 {lowFlowState === "recommendation" && (
